@@ -49,19 +49,19 @@ export function HowItWorks() {
                 return (
                   <div key={step.step} className="flex gap-4 group">
                     <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:bg-accent transition-colors shrink-0">
-                        <Icon className="w-5 h-5 text-white" />
+                      <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:bg-accent focus:outline-none focus:ring-2 focus:ring-primary transition-colors shrink-0" role="img" aria-label={`Step ${step.step}: ${step.title}`}>
+                        <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                       </div>
-                      {i < steps.length - 1 && <div className="w-0.5 h-8 bg-border mt-2" />}
+                      {i < steps.length - 1 && <div className="w-0.5 h-8 bg-border mt-2" aria-hidden="true" />}
                     </div>
 
                     <div className="pb-2">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs text-primary" style={{ fontWeight: 700 }}>
+                        <span className="text-xs text-primary font-bold tracking-wide">
                           STEP {step.step}
                         </span>
                       </div>
-                      <h3 className="text-foreground mb-1">{step.title}</h3>
+                      <h3 className="text-foreground mb-1 font-semibold">{step.title}</h3>
                       <p className="text-muted-foreground text-sm leading-relaxed">{step.description}</p>
                     </div>
                   </div>
@@ -69,9 +69,9 @@ export function HowItWorks() {
               })}
             </div>
 
-            <button className="mt-10 inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-md text-sm">
+            <button className="mt-10 inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-95 transition-all shadow-md text-sm font-medium" aria-label="Start learning now">
               Mulai Sekarang
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
 

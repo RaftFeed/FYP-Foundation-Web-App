@@ -1,4 +1,5 @@
-import { Search, ArrowRight, Star, Users, BookOpen, Award } from 'lucide-react';
+import { useState } from 'react';
+import { Search, ArrowRight, Star, Users, BookOpen, Award, Check } from 'lucide-react';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1711763560427-3cbd84a54409?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdHVkZW50JTIwc3R1ZHlpbmclMjBib29rcyUyMHVuaXZlcnNpdHklMjBzbWlsaW5nfGVufDF8fHx8MTc3NjY4NzAxMHww&ixlib=rb-4.1.0&q=80&w=1080';
@@ -10,10 +11,27 @@ const stats = [
   { icon: Star, value: '4.9', label: 'Rating Rata-rata' },
 ];
 
+const allCourses = ['Fisika Dasar', 'Kalkulus', 'Kimia Dasar', 'Pemrograman', 'Matematika Diskrit', 'Biologi Umum'];
+
 export function HeroSection() {
+  const [searchInput, setSearchInput] = useState('');
+  const [showResults, setShowResults] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+
+  const filteredCourses = searchInput.trim()
+    ? allCourses.filter((c) => c.toLowerCase().includes(searchInput.toLowerCase()))
+    : [];
+
+  const handleCourseSelect = (course: string) => {
+    setSelectedCourse(course);
+    setSearchInput(course);
+    setShowResults(false);
+    console.log('Course selected:', course);
+  };
+
   return (
     <section id="beranda" className="bg-white overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 py-16 lg:py-20">
+      <div className="max-w-7xl mx-auto px-6 py-16 lg:py-24">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="order-2 lg:order-1">
             <div
@@ -52,20 +70,55 @@ export function HeroSection() {
               buat sesi privat bersama tutor terbaik.
             </p>
 
-            <div className="flex gap-3 mb-8 bg-white border-2 border-border rounded-xl p-2 shadow-md hover:border-primary transition-colors max-w-lg">
+            <div className="flex gap-3 mb-8 bg-white border-2 border-border rounded-xl p-2 shadow-md hover:border-primary/50 focus-within:border-primary focus-within:shadow-lg transition-all max-w-lg">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" aria-hidden="true" />
                 <input
                   type="text"
                   placeholder="Cari Mata Kuliah..."
+                  value={searchInput}
+                  onChange={(e) => {
+                    setSearchInput(e.target.value);
+                    setShowResults(e.target.value.trim().length > 0);
+                  }}
+                  onFocus={() => setShowResults(searchInput.trim().length > 0)}
                   className="w-full pl-10 pr-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm"
+                  aria-label="Cari mata kuliah"
+                  aria-autocomplete="list"
+                  aria-controls="search-suggestions"
                 />
               </div>
-              <button className="px-5 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all text-sm flex items-center gap-2 shrink-0">
+              <button 
+                className="px-5 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 active:scale-95 transition-all text-sm flex items-center gap-2 shrink-0 font-medium"
+                aria-label="Cari"
+              >
                 Cari
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Search Suggestions */}
+            {showResults && filteredCourses.length > 0 && (
+              <div 
+                id="search-suggestions"
+                className="mb-8 bg-white border border-border rounded-xl shadow-lg overflow-hidden max-w-lg"
+                role="listbox"
+              >
+                {filteredCourses.map((course) => (
+                  <button
+                    key={course}
+                    onClick={() => handleCourseSelect(course)}
+                    className="w-full px-4 py-3 text-left hover:bg-secondary transition-colors border-b border-border/30 last:border-0 text-sm font-medium text-foreground flex items-center gap-3"
+                    role="option"
+                    aria-selected={selectedCourse === course}
+                  >
+                    <Search className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                    <span>{course}</span>
+                    {selectedCourse === course && <Check className="w-4 h-4 text-primary ml-auto" aria-hidden="true" />}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2 mb-10">
               <span className="text-sm text-muted-foreground mr-1" style={{ fontWeight: 600 }}>
@@ -74,7 +127,13 @@ export function HeroSection() {
               {['Fisika Dasar', 'Kalkulus', 'Kimia Dasar', 'Pemrograman'].map((tag) => (
                 <button
                   key={tag}
-                  className="text-sm px-3.5 py-1.5 rounded-full border border-border text-muted-foreground hover:border-primary hover:text-primary hover:bg-secondary transition-all"
+                  onClick={() => handleCourseSelect(tag)}
+                  className={`text-sm px-3.5 py-1.5 rounded-full border transition-all ${
+                    selectedCourse === tag
+                      ? 'bg-primary text-white border-primary'
+                      : 'border-border text-muted-foreground hover:border-primary hover:text-primary hover:bg-secondary'
+                  }`}
+                  aria-pressed={selectedCourse === tag}
                 >
                   {tag}
                 </button>

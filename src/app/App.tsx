@@ -4,8 +4,10 @@ import { HeroSection } from './components/HeroSection';
 import { MatkulCatalog } from './components/MatkulCatalog';
 import { TutorCard } from './components/TutorCard';
 import { HowItWorks } from './components/HowItWorks';
+import { Testimonials } from './components/Testimonials';
+import { MobileStickyCTA } from './components/MobileStickyCTA';
 import { Footer } from './components/Footer';
-// import { StyleToggle } from './components/StyleToggle';
+import { GlobalStateProvider } from './context/GlobalState';
 
 const tutors = [
   {
@@ -77,13 +79,15 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <HeroSection />
-      <MatkulCatalog />
-      <HowItWorks />
+    <GlobalStateProvider>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <HeroSection />
+        <MatkulCatalog />
+        <HowItWorks />
+        <Testimonials />
 
-      {/* Katalog Tutor */}
+        {/* Katalog Tutor */}
       <section id="katalog" className="py-20 bg-secondary">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-10 gap-4">
@@ -120,6 +124,8 @@ export default function App() {
       </section>
 
       <Footer />
+      <MobileStickyCTA />
     </div>
+    </GlobalStateProvider>
   );
 }

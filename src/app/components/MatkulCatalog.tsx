@@ -87,17 +87,18 @@ function CreateGroupModal({ matkul, onClose, onConfirm }: CreateGroupModalProps)
   const Icon = matkul.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="h-1.5 bg-gradient-to-r from-primary to-accent w-full" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose} role="presentation">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="create-group-title">
+        <div className="h-1.5 bg-gradient-to-r from-primary to-accent w-full" aria-hidden="true" />
 
         <div className="p-8">
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-muted hover:bg-border transition-colors"
+            className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-muted hover:bg-border focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
+            aria-label="Close dialog"
           >
-            <X className="w-4 h-4 text-muted-foreground" />
+            <X className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
           </button>
 
           <div className="flex justify-center mb-5">
@@ -116,7 +117,7 @@ function CreateGroupModal({ matkul, onClose, onConfirm }: CreateGroupModalProps)
             </span>
           </div>
 
-          <h3 className="text-center text-foreground mb-2">Belum Ada Kelas Aktif</h3>
+          <h3 className="text-center text-foreground mb-2" id="create-group-title">Belum Ada Kelas Aktif</h3>
           <p className="text-center text-muted-foreground mb-6 text-sm leading-relaxed">
             Belum ada kelas grup aktif untuk mata kuliah ini. Apakah Anda ingin membuat grup baru dan mengundang teman sekelas?
           </p>
@@ -131,15 +132,15 @@ function CreateGroupModal({ matkul, onClose, onConfirm }: CreateGroupModalProps)
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 py-3 border-2 border-border text-muted-foreground rounded-xl hover:border-primary hover:text-primary transition-all text-sm"
+              className="flex-1 py-3 border-2 border-border text-muted-foreground rounded-xl hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-medium"
             >
               Batal
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all text-sm flex items-center justify-center gap-2 shadow-md"
+              className="flex-1 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-md"
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-4 h-4" aria-hidden="true" />
               Buat Grup Baru
             </button>
           </div>
@@ -160,19 +161,19 @@ function SuccessModal({ matkul, onClose }: SuccessModalProps) {
   const groupCode = `${matkul.code}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-center" onClick={(e) => e.stopPropagation()}>
-        <div className="h-1.5 bg-gradient-to-r from-primary to-accent w-full" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose} role="presentation">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-center" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="success-title">
+        <div className="h-1.5 bg-gradient-to-r from-primary to-accent w-full" aria-hidden="true" />
 
         <div className="p-8">
-          <div className="flex justify-center mb-5">
+          <div className="flex justify-center mb-5" aria-hidden="true">
             <div className="w-16 h-16 rounded-2xl bg-green-50 border-2 border-green-200 flex items-center justify-center">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
           </div>
 
-          <h3 className="text-foreground mb-2">Grup Berhasil Dibuat!</h3>
+          <h3 className="text-foreground mb-2" id="success-title">Grup Berhasil Dibuat!</h3>
           <p className="text-muted-foreground text-sm mb-6">
             Grup belajar <strong>{matkul.name}</strong> telah dibuat. Bagikan kode berikut ke teman-temanmu!
           </p>
@@ -186,7 +187,11 @@ function SuccessModal({ matkul, onClose }: SuccessModalProps) {
             </p>
           </div>
 
-          <button onClick={onClose} className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all text-sm shadow-md">
+          <button 
+            onClick={onClose} 
+            className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all text-sm font-medium shadow-md"
+            autoFocus
+          >
             Selesai
           </button>
         </div>
@@ -258,7 +263,7 @@ export function MatkulCatalog() {
 
                   <div className="relative">
                     <div className="flex items-start justify-between mb-5">
-                      <div className={`w-[52px] h-[52px] ${matkul.bgColor} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+<div className={`w-[52px] h-[52px] ${matkul.bgColor} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`} aria-hidden="true">
                         <Icon className={`w-6 h-6 ${matkul.color}`} />
                       </div>
 
