@@ -3,3 +3,7 @@ dist/
 .DS_Store
 Thumbs.db
 .vite/
+.env
+.env.local
+.env.*.local
+vite-dev*.log

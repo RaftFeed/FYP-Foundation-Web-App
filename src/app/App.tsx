@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { MatkulCatalog } from './components/MatkulCatalog';
@@ -8,6 +8,11 @@ import { Testimonials } from './components/Testimonials';
 import { MobileStickyCTA } from './components/MobileStickyCTA';
 import { Footer } from './components/Footer';
 import { GlobalStateProvider } from './context/GlobalState';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AdminDashboard } from './components/AdminDashboard';
+import { RoleDashboard } from './components/RoleDashboard';
+import { AuthPage } from './components/AuthPage';
+import { StudentDashboard } from './components/StudentDashboard';
 
 const tutors = [
   {
@@ -71,6 +76,12 @@ const themeTokens: Record<string, Record<string, string>> = {
   }
 };
 
+function getCurrentRoute() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const path = window.location.pathname;
+  return path.startsWith(base) ? path.slice(base.length) || '/' : path;
+}
+
 export default function App() {
   useEffect(() => {
     const root = document.documentElement;
@@ -80,12 +91,60 @@ export default function App() {
 
   return (
     <GlobalStateProvider>
-      <div className="min-h-screen bg-background">
-        <Header />
-        <HeroSection />
-        <MatkulCatalog />
-        <HowItWorks />
-        <Testimonials />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </GlobalStateProvider>
+  );
+}
+
+function AppContent() {
+  const { session, role, isAuthLoading } = useAuth();
+  const [route, setRoute] = useState(getCurrentRoute);
+
+  useEffect(() => {
+    function handleRouteChange() {
+      setRoute(getCurrentRoute());
+    }
+
+    window.addEventListener('popstate', handleRouteChange);
+    return () => window.removeEventListener('popstate', handleRouteChange);
+  }, []);
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-secondary border-t-primary" />
+          <p className="text-sm font-semibold text-muted-foreground">Loading your workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (session && role === 'admin') {
+    return <AdminDashboard />;
+  }
+
+  if (session && role === 'student') {
+    return <StudentDashboard />;
+  }
+
+  if (session && role === 'tutor') {
+    return <RoleDashboard role={role} />;
+  }
+
+  if (route === '/login') {
+    return <AuthPage />;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <HeroSection />
+      <MatkulCatalog />
+      <HowItWorks />
+      <Testimonials />
 
         {/* Katalog Tutor */}
       <section id="katalog" className="py-20 bg-secondary">
@@ -126,6 +185,5 @@ export default function App() {
       <Footer />
       <MobileStickyCTA />
     </div>
-    </GlobalStateProvider>
   );
 }

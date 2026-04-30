@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Menu, X, GraduationCap } from 'lucide-react';
 
+function openAuthPage(mode: 'login' | 'signup') {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  window.history.pushState({}, '', `${base}/login${mode === 'signup' ? '?mode=signup' : ''}`);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -46,12 +52,16 @@ export function Header() {
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
             <button 
+              type="button"
+              onClick={() => openAuthPage('login')}
               className="px-5 py-2.5 text-primary border-2 border-primary rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-medium"
               aria-label="Login"
             >
               Masuk
             </button>
             <button 
+              type="button"
+              onClick={() => openAuthPage('signup')}
               className="px-5 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all text-sm font-medium shadow-sm"
               aria-label="Sign up for free"
             >
@@ -95,12 +105,22 @@ export function Header() {
             </nav>
             <div className="flex gap-3 pt-3">
               <button 
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  openAuthPage('login');
+                }}
                 className="flex-1 py-2.5 text-primary border-2 border-primary rounded-lg text-sm font-medium hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary transition-all"
                 aria-label="Login"
               >
                 Masuk
               </button>
               <button 
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  openAuthPage('signup');
+                }}
                 className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
                 aria-label="Sign up for free"
               >
