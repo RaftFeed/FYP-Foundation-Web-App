@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 
@@ -12,7 +12,7 @@ interface AuthContextValue {
   authError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signUp: (email: string, password: string, role: Exclude<UserRole, 'admin'>) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, role: Exclude<UserRole, 'admin'>) => Promise<void>;
   signOut: () => Promise<void>;
   clearAuthError: () => void;
 }
@@ -94,6 +94,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const signIn = useCallback(async (email: string, password: string) => {
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+
+    if (error) {
+      setAuthError(error.message);
+      throw error;
+    }
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: getRedirectUrl(),
+      },
+    });
+
+    if (error) {
+      setAuthError(error.message);
+      throw error;
+    }
+  }, []);
+
+  const signUp = useCallback(
+    async (email: string, password: string, fullName: string, selectedRole: Exclude<UserRole, 'admin'>) => {
+      setAuthError(null);
+
+      const cleanedEmail = email.trim();
+      const cleanedFullName = fullName.trim();
+      const { error } = await supabase.auth.signUp({
+        email: cleanedEmail,
+        password,
+        options: {
+          emailRedirectTo: getRedirectUrl(),
+          data: {
+            full_name: cleanedFullName,
+            name: cleanedFullName,
+            role: selectedRole,
+          },
+        },
+      });
+
+      if (error) {
+        setAuthError(error.message);
+        throw error;
+      }
+    },
+    [],
+  );
+
+  const signOut = useCallback(async () => {
+    setAuthError(null);
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setAuthError(error.message);
+      throw error;
+    }
+  }, []);
+
+  const clearAuthError = useCallback(() => setAuthError(null), []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -101,58 +165,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       isAuthLoading,
       authError,
-      signIn: async (email, password) => {
-        setAuthError(null);
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-        if (error) {
-          setAuthError(error.message);
-          throw error;
-        }
-      },
-      signInWithGoogle: async () => {
-        setAuthError(null);
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: getRedirectUrl(),
-          },
-        });
-
-        if (error) {
-          setAuthError(error.message);
-          throw error;
-        }
-      },
-      signUp: async (email, password, selectedRole) => {
-        setAuthError(null);
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              role: selectedRole,
-            },
-          },
-        });
-
-        if (error) {
-          setAuthError(error.message);
-          throw error;
-        }
-      },
-      signOut: async () => {
-        setAuthError(null);
-        const { error } = await supabase.auth.signOut();
-
-        if (error) {
-          setAuthError(error.message);
-          throw error;
-        }
-      },
-      clearAuthError: () => setAuthError(null),
+      signIn,
+      signInWithGoogle,
+      signUp,
+      signOut,
+      clearAuthError,
     }),
-    [authError, isAuthLoading, role, session],
+    [authError, clearAuthError, isAuthLoading, role, session, signIn, signInWithGoogle, signOut, signUp],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

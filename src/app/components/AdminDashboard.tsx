@@ -30,8 +30,23 @@ import {
   upsertSubject,
   upsertTutorProfile,
 } from '../../lib/dashboardData';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend,
+  TimeScale,
+} from 'chart.js';
+import 'chartjs-adapter-date-fns';
+import { fetchPaymentsSummaryByDay, fetchDailyPaymentsReport, Payment } from '../../lib/paymentsReports';
 
-type AdminTab = 'sessions' | 'tutors' | 'subjects' | 'bookings' | 'users';
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, TimeScale);
+
+type AdminTab = 'sessions' | 'tutors' | 'subjects' | 'bookings' | 'users' | 'reports';
 
 const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'sessions', label: 'Sessions' },
@@ -39,6 +54,7 @@ const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'subjects', label: 'Subjects' },
   { id: 'bookings', label: 'Bookings' },
   { id: 'users', label: 'Users' },
+  { id: 'reports', label: 'Reports' },
 ];
 
 const emptySubject = { name: '', code: '', description: '' };
@@ -72,6 +88,10 @@ export function AdminDashboard() {
   const [editingTutorId, setEditingTutorId] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState(emptySession);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [paymentsSummary, setPaymentsSummary] = useState<Array<{ day: string; total: number }>>([]);
+  const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
+  const [reportRangeDays, setReportRangeDays] = useState<number>(7);
+  const [reportDate, setReportDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
   const loadAdminData = async () => {
     setIsLoading(true);
@@ -88,6 +108,18 @@ export function AdminDashboard() {
       setSessions(nextSessions);
       setBookings(nextBookings);
       setProfiles(nextProfiles);
+      try {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - (reportRangeDays - 1));
+        const fmt = (d: Date) => d.toISOString().slice(0, 10);
+        const summary = await fetchPaymentsSummaryByDay(fmt(startDate), fmt(endDate));
+        setPaymentsSummary((summary ?? []).map((row: any) => ({ day: String(row.day), total: Number(row.total) })));
+        const daily = await fetchDailyPaymentsReport(fmt(endDate));
+        setPaymentsList((daily ?? []) as Payment[]);
+      } catch (err) {
+        console.error('Failed to load payment reports', err);
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat admin dashboard.');
     } finally {
@@ -337,6 +369,29 @@ export function AdminDashboard() {
             onRoleChange={(id, role) => runAdminAction(() => updateProfileRole(id, role), 'User role updated.')}
           />
         )}
+        {activeTab === 'reports' && (
+          <ReportsPanel
+            summary={paymentsSummary}
+            payments={paymentsList}
+            rangeDays={reportRangeDays}
+            onRangeChange={(days) => {
+              setReportRangeDays(days);
+              void loadAdminData();
+            }}
+            date={reportDate}
+            onDateChange={(d) => {
+              setReportDate(d);
+              void (async () => {
+                try {
+                  const daily = await fetchDailyPaymentsReport(d);
+                  setPaymentsList(daily ?? []);
+                } catch (err) {
+                  console.error(err);
+                }
+              })();
+            }}
+          />
+        )}
       </main>
     </div>
   );
@@ -560,6 +615,102 @@ function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleCha
           </tr>
         ))}
       </DataTable>
+    </section>
+  );
+}
+
+function ReportsPanel({
+  summary,
+  payments,
+  rangeDays,
+  onRangeChange,
+  date,
+  onDateChange,
+}: {
+  summary: Array<{ day: string; total: number }>;
+  payments: Payment[];
+  rangeDays: number;
+  onRangeChange: (days: number) => void;
+  date: string;
+  onDateChange: (d: string) => void;
+}) {
+  const totalRevenue = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalCount = payments.length;
+
+  const chartData = {
+    labels: summary.map((s) => s.day),
+    datasets: [
+      {
+        label: 'Pendapatan (IDR)',
+        data: summary.map((s) => Number(s.total)),
+        borderColor: '#2563EB',
+        backgroundColor: 'rgba(37,99,235,0.08)',
+        tension: 0.3,
+      },
+    ],
+  };
+
+  const chartOptions: any = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode: 'index', intersect: false },
+    },
+    scales: {
+      x: { type: 'time', time: { unit: rangeDays <= 7 ? 'day' : 'day' } },
+      y: { beginAtZero: true },
+    },
+  };
+
+  return (
+    <section className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-lg font-extrabold">Reports</h2>
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-border bg-secondary/40 p-3">
+            <p className="text-sm text-muted-foreground">Revenue Today</p>
+            <p className="mt-1 text-lg font-extrabold">{formatCurrency(totalRevenue)}</p>
+            <p className="text-xs text-muted-foreground">{totalCount} transactions</p>
+          </div>
+          <div className="rounded-lg border border-border bg-secondary/40 p-3">
+            <p className="text-sm text-muted-foreground">Selected Day</p>
+            <input type="date" value={date} onChange={(e) => onDateChange(e.target.value)} className="mt-1 w-full rounded-lg border border-primary/20 px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div className="mb-3 flex gap-2">
+          <button onClick={() => onRangeChange(7)} className={`h-9 rounded-lg px-3 text-sm font-semibold ${rangeDays === 7 ? 'bg-primary text-white' : 'border border-border text-primary'}`}>7 Hari</button>
+          <button onClick={() => onRangeChange(30)} className={`h-9 rounded-lg px-3 text-sm font-semibold ${rangeDays === 30 ? 'bg-primary text-white' : 'border border-border text-primary'}`}>30 Hari</button>
+          <button onClick={() => onRangeChange(90)} className={`h-9 rounded-lg px-3 text-sm font-semibold ${rangeDays === 90 ? 'bg-primary text-white' : 'border border-border text-primary'}`}>90 Hari</button>
+        </div>
+      </div>
+
+      <div>
+        <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
+          <Line data={chartData} options={chartOptions} />
+        </div>
+
+        <div className="mt-6 rounded-lg border border-border bg-white p-5 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Transactions ({date})</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted text-muted-foreground"><tr><th className="px-4 py-3">ID</th><th className="px-4 py-3">Booking</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Paid At</th></tr></thead>
+              <tbody className="divide-y divide-border">
+                {payments.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-4 py-3">{p.id.slice(0, 8)}</td>
+                    <td className="px-4 py-3">{p.booking_id.slice(0, 8)}</td>
+                    <td className="px-4 py-3">{formatCurrency(Number(p.amount))}</td>
+                    <td className="px-4 py-3">{p.payment_method}</td>
+                    <td className="px-4 py-3">{p.status}</td>
+                    <td className="px-4 py-3">{p.paid_at ? formatDate(p.paid_at) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

@@ -12,6 +12,7 @@ interface AuthModalProps {
 export function AuthModal({ initialMode, onClose }: AuthModalProps) {
   const { signIn, signInWithGoogle, signUp, authError, clearAuthError } = useAuth();
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Exclude<UserRole, 'admin'>>('student');
@@ -33,7 +34,7 @@ export function AuthModal({ initialMode, onClose }: AuthModalProps) {
         await signIn(email, password);
         onClose();
       } else {
-        await signUp(email, password, role);
+        await signUp(email, password, fullName, role);
         setMessage('Account created. Check your email if confirmation is enabled, then sign in.');
         setMode('login');
       }
@@ -76,6 +77,24 @@ export function AuthModal({ initialMode, onClose }: AuthModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
+          {mode === 'signup' && (
+            <div className="space-y-2">
+              <label htmlFor="auth-full-name" className="block text-sm text-foreground">
+                Nama Lengkap
+              </label>
+              <input
+                id="auth-full-name"
+                type="text"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                className="w-full rounded-lg border border-border px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                placeholder="Nama lengkap"
+                autoComplete="name"
+                required
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <label htmlFor="auth-email" className="block text-sm text-foreground">
               Email

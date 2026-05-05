@@ -7,3 +7,5 @@ Thumbs.db
 .env.local
 .env.*.local
 vite-dev*.log
+AI_MANAGEMENT.md
+AUDIT_REPORT.md

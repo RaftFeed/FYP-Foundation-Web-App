@@ -22,11 +22,14 @@ import {
   bookCourseSession,
   bookingStatusLabel,
   cancelBooking,
+  fetchProfileById,
   fetchCourseSessions,
   fetchMyBookings,
   formatCurrency,
   formatDate,
   formatTimeRange,
+  updateProfileName,
+  type Profile,
 } from '../../lib/dashboardData';
 
 type StudentView = 'dashboard' | 'courses' | 'bookings' | 'schedule' | 'profile' | 'settings';
@@ -61,10 +64,13 @@ export function StudentDashboard() {
   const [activeView, setActiveView] = useState<StudentView>('dashboard');
   const [sessions, setSessions] = useState<CourseSession[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const displayName = getDisplayName(user?.email);
+  const [nameInput, setNameInput] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
 
   const loadDashboard = async () => {
     if (!user) {
@@ -73,12 +79,14 @@ export function StudentDashboard() {
 
     setIsLoading(true);
     try {
-      const [nextSessions, nextBookings] = await Promise.all([
+      const [nextSessions, nextBookings, nextProfile] = await Promise.all([
         fetchCourseSessions(),
         fetchMyBookings(user.id),
+        fetchProfileById(user.id),
       ]);
       setSessions(nextSessions);
       setBookings(nextBookings);
+      setProfile(nextProfile);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat data dashboard.');
     } finally {
@@ -89,6 +97,12 @@ export function StudentDashboard() {
   useEffect(() => {
     void loadDashboard();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (profile?.full_name) {
+      setNameInput(profile.full_name);
+    }
+  }, [profile?.full_name]);
 
   const handleBook = async (sessionId: string) => {
     setNotice(null);
@@ -110,6 +124,31 @@ export function StudentDashboard() {
       await loadDashboard();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal membatalkan booking.');
+    }
+  };
+
+  const handleNameSave = async () => {
+    if (!user) {
+      return;
+    }
+
+    const trimmedName = nameInput.trim();
+    if (!trimmedName) {
+      setNotice('Nama lengkap tidak boleh kosong.');
+      return;
+    }
+
+    setIsSavingName(true);
+    setNotice(null);
+    try {
+      await updateProfileName(user.id, trimmedName);
+      const nextProfile = await fetchProfileById(user.id);
+      setProfile(nextProfile);
+      setNotice('Nama berhasil diperbarui.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Gagal memperbarui nama.');
+    } finally {
+      setIsSavingName(false);
     }
   };
 
@@ -192,7 +231,17 @@ export function StudentDashboard() {
           {activeView === 'bookings' && <BookingsView bookings={bookings} onCancel={handleCancel} />}
           {activeView === 'schedule' && <TutorScheduleView sessions={sessions} />}
           {activeView === 'settings' && <SettingsView />}
-          {activeView === 'profile' && <ProfileView email={user?.email ?? ''} displayName={displayName} bookings={bookings} />}
+          {activeView === 'profile' && (
+            <ProfileView
+              bookings={bookings}
+              displayName={displayName}
+              email={user?.email ?? ''}
+              isSavingName={isSavingName}
+              nameInput={nameInput}
+              onNameChange={setNameInput}
+              onNameSave={handleNameSave}
+            />
+          )}
           {activeView === 'dashboard' && <DashboardView bookings={bookings} displayName={displayName} sessions={sessions} setActiveView={setActiveView} />}
         </main>
       </div>
@@ -489,7 +538,23 @@ function TutorScheduleView({ sessions }: { sessions: CourseSession[] }) {
   );
 }
 
-function ProfileView({ bookings, displayName, email }: { bookings: Booking[]; displayName: string; email: string }) {
+function ProfileView({
+  bookings,
+  displayName,
+  email,
+  isSavingName,
+  nameInput,
+  onNameChange,
+  onNameSave,
+}: {
+  bookings: Booking[];
+  displayName: string;
+  email: string;
+  isSavingName: boolean;
+  nameInput: string;
+  onNameChange: (value: string) => void;
+  onNameSave: () => void;
+}) {
   return (
     <section className="mx-auto max-w-6xl">
       <p className="mb-4 text-2xl font-semibold uppercase tracking-[0.22em] text-primary lg:text-3xl">Profil</p>
@@ -503,6 +568,31 @@ function ProfileView({ bookings, displayName, email }: { bookings: Booking[]; di
             <p className="text-sm font-medium text-muted-foreground">{email}</p>
           </div>
         </div>
+        <form
+          className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onNameSave();
+          }}
+        >
+          <label className="block">
+            <span className="text-sm font-semibold text-foreground">Nama lengkap</span>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder="Masukkan nama lengkap"
+              className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={isSavingName}
+            className="h-11 rounded-lg bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+          >
+            {isSavingName ? 'Menyimpan...' : 'Simpan nama'}
+          </button>
+        </form>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <ProfileStat label="Total Booking" value={String(bookings.length)} />
           <ProfileStat label="Aktif" value={String(bookings.filter((booking) => booking.status === 'upcoming' || booking.status === 'pending_payment').length)} />

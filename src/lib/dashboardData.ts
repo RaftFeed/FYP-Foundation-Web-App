@@ -283,6 +283,10 @@ async function joinClassWithoutRpc(sessionId: string) {
 
   throwIfError(sessionError);
 
+  if (!sessionData) {
+    throw new Error('Session is not available.');
+  }
+
   const { data: authData, error: authError } = await supabase.auth.getUser();
   throwIfError(authError);
 
@@ -405,6 +409,17 @@ export async function fetchProfiles() {
   return (data ?? []) as Profile[];
 }
 
+export async function fetchProfileById(id: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, role, created_at')
+    .eq('id', id)
+    .maybeSingle();
+
+  throwIfError(error);
+  return (data ?? null) as Profile | null;
+}
+
 export async function upsertSubject(input: Pick<Subject, 'name' | 'code' | 'description'> & { id?: string }) {
   const payload = {
     name: input.name.trim(),
@@ -506,5 +521,18 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
 
 export async function updateProfileRole(id: string, role: UserRole) {
   const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+  throwIfError(error);
+}
+
+export async function updateProfileName(id: string, fullName: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ full_name: fullName.trim() })
+    .eq('id', id)
+    .select();
+
+  console.log("UPDATED:", data);
+  console.log("ERROR:", error);
+
   throwIfError(error);
 }

@@ -18,6 +18,7 @@ function navigateHome() {
 export function AuthPage() {
   const { signIn, signInWithGoogle, signUp, authError, clearAuthError } = useAuth();
   const [mode, setMode] = useState<AuthMode>(getInitialMode);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Exclude<UserRole, 'admin'>>('student');
@@ -44,7 +45,7 @@ export function AuthPage() {
       if (mode === 'login') {
         await signIn(email, password);
       } else {
-        await signUp(email, password, role);
+        await signUp(email, password, fullName, role);
         setMessage('Account created. Check your email if confirmation is enabled, then sign in.');
         setAuthMode('login');
       }
@@ -77,7 +78,7 @@ export function AuthPage() {
           <button
             type="button"
             onClick={navigateHome}
-            className="absolute left-8 top-8 flex h-12 w-12 items-center justify-center rounded-lg bg-white/90 text-primary shadow-lg backdrop-blur transition hover:bg-white"
+            className="absolute left-8 top-8 flex h-12 w-12 items-center justify-center rounded-lg bg-white/90 text-primary shadow-lg backdrop-blur transition hover:bg-black/10 on-click:ring-1 focus:outline-none focus:ring-primary focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             aria-label="Back to home"
           >
             <Play className="h-6 w-6 fill-current" />
@@ -108,6 +109,22 @@ export function AuthPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'signup' && (
+                <label className="relative block">
+                  <span className="sr-only">Nama Lengkap</span>
+                  <UserRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    className="h-11 w-full rounded-lg border border-border pl-11 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    placeholder="Nama lengkap"
+                    autoComplete="name"
+                    required
+                  />
+                </label>
+              )}
+
               <label className="relative block">
                 <span className="sr-only">Email</span>
                 <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

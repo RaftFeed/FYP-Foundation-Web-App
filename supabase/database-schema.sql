@@ -361,6 +361,14 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "Users can update their own profile" on public.profiles;
+create policy "Users can update their own profile"
+on public.profiles
+for update
+to authenticated
+using (auth.uid() = id)
+with check (auth.uid() = id);
+
 drop policy if exists "Subjects are public readable" on public.subjects;
 create policy "Subjects are public readable"
 on public.subjects
