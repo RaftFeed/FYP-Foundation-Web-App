@@ -43,6 +43,7 @@ import {
 } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import { fetchPaymentsSummaryByDay, fetchDailyPaymentsReport, Payment } from '../../lib/paymentsReports';
+import { supabase } from '../../lib/supabase';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, TimeScale);
 
@@ -93,7 +94,7 @@ export function AdminDashboard() {
   const [reportRangeDays, setReportRangeDays] = useState<number>(7);
   const [reportDate, setReportDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
-  const loadAdminData = async () => {
+  const loadAdminData = async (daysParam?: number) => {
     setIsLoading(true);
     try {
       const [nextSubjects, nextTutors, nextSessions, nextBookings, nextProfiles] = await Promise.all([
@@ -114,8 +115,11 @@ export function AdminDashboard() {
         startDate.setDate(endDate.getDate() - (reportRangeDays - 1));
         const fmt = (d: Date) => d.toISOString().slice(0, 10);
         const summary = await fetchPaymentsSummaryByDay(fmt(startDate), fmt(endDate));
-        setPaymentsSummary((summary ?? []).map((row: any) => ({ day: String(row.day), total: Number(row.total) })));
+        const mapped = (summary ?? []).map((row: any) => ({ day: String(row.day), total: Number(row.total) }));
+        console.debug('payments summary fetched', mapped);
+        setPaymentsSummary(mapped);
         const daily = await fetchDailyPaymentsReport(fmt(endDate));
+        console.debug('daily payments fetched', daily);
         setPaymentsList((daily ?? []) as Payment[]);
       } catch (err) {
         console.error('Failed to load payment reports', err);
@@ -131,6 +135,28 @@ export function AdminDashboard() {
     void loadAdminData();
   }, []);
 
+  // Subscribe to payments table realtime changes when Reports tab is active
+  useEffect(() => {
+    if (activeTab !== 'reports') return;
+
+    const channel = supabase.channel('public:payments');
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'payments' },
+      (payload) => {
+        console.debug('realtime payments change', payload);
+        // refresh reports using current range
+        void loadAdminData(reportRangeDays);
+      },
+    );
+
+    void channel.subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeTab, reportRangeDays]);
+
   const stats = useMemo(
     () => [
       { label: 'Total Students', value: String(profiles.filter((profile) => profile.role === 'student').length), icon: Users },
@@ -140,16 +166,6 @@ export function AdminDashboard() {
     ],
     [profiles, sessions, subjects, tutors],
   );
-
-  const handleSubjectSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    await runAdminAction(async () => {
-      await upsertSubject({ id: editingSubjectId ?? undefined, ...subjectForm });
-      setSubjectForm(emptySubject);
-      setEditingSubjectId(null);
-    }, 'Subject saved.');
-  };
-
   const handleTutorSubmit = async (event: FormEvent) => {
     event.preventDefault();
     await runAdminAction(async () => {
@@ -180,6 +196,20 @@ export function AdminDashboard() {
       setSessionForm(emptySession);
       setEditingSessionId(null);
     }, 'Session saved.');
+  };
+
+  const handleSubjectSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    await runAdminAction(async () => {
+      await upsertSubject({
+        id: editingSubjectId ?? undefined,
+        name: subjectForm.name,
+        code: subjectForm.code || null,
+        description: subjectForm.description || null,
+      });
+      setSubjectForm(emptySubject);
+      setEditingSubjectId(null);
+    }, 'Subject saved.');
   };
 
   const runAdminAction = async (action: () => Promise<void>, successMessage: string) => {
@@ -374,10 +404,7 @@ export function AdminDashboard() {
             summary={paymentsSummary}
             payments={paymentsList}
             rangeDays={reportRangeDays}
-            onRangeChange={(days) => {
-              setReportRangeDays(days);
-              void loadAdminData();
-            }}
+            onRangeChange={(days) => void loadAdminData(days)}
             date={reportDate}
             onDateChange={(d) => {
               setReportDate(d);
@@ -708,6 +735,9 @@ function ReportsPanel({
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="mt-4 text-xs text-muted-foreground">
+            <pre className="max-h-40 overflow-auto text-xs">{JSON.stringify({summary, payments}, null, 2)}</pre>
           </div>
         </div>
       </div>

@@ -10,9 +10,9 @@ import { Footer } from './components/Footer';
 import { GlobalStateProvider } from './context/GlobalState';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminDashboard } from './components/AdminDashboard';
-import { RoleDashboard } from './components/RoleDashboard';
 import { AuthPage } from './components/AuthPage';
 import { StudentDashboard } from './components/StudentDashboard';
+import { TutorDashboard } from './components/TutorDashboard';
 
 const tutors = [
   {
@@ -131,7 +131,7 @@ function AppContent() {
   }
 
   if (session && role === 'tutor') {
-    return <RoleDashboard role={role} />;
+    return <TutorDashboard />;
   }
 
   if (route === '/login') {

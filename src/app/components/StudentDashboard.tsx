@@ -13,9 +13,11 @@ import {
   Settings,
   SquarePen,
   UserRound,
+  Users,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { MatchmakingLobbyView } from './MatchmakingLobbyView';
 import {
   Booking,
   CourseSession,
@@ -32,11 +34,12 @@ import {
   type Profile,
 } from '../../lib/dashboardData';
 
-type StudentView = 'dashboard' | 'courses' | 'bookings' | 'schedule' | 'profile' | 'settings';
+type StudentView = 'dashboard' | 'courses' | 'lobbies' | 'bookings' | 'schedule' | 'profile' | 'settings';
 
 const navigation = [
   { label: 'Dashboard', icon: Home, view: 'dashboard' },
   { label: 'Mata Kuliah', icon: BookOpen, view: 'courses' },
+  { label: 'Lobby Grup', icon: Users, view: 'lobbies' },
   { label: 'Booking Saya', icon: SquarePen, view: 'bookings' },
   { label: 'Jadwal Tutor', icon: CalendarDays, view: 'schedule' },
   { label: 'Profil', icon: UserRound, view: 'profile' },
@@ -228,6 +231,7 @@ export function StudentDashboard() {
           )}
 
           {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} sessions={sessions} setQuery={setQuery} onBook={handleBook} />}
+          {activeView === 'lobbies' && <MatchmakingLobbyView />}
           {activeView === 'bookings' && <BookingsView bookings={bookings} onCancel={handleCancel} />}
           {activeView === 'schedule' && <TutorScheduleView sessions={sessions} />}
           {activeView === 'settings' && <SettingsView />}
