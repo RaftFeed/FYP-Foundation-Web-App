@@ -79,7 +79,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     loadSession();
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setRole(null);
+        setIsAuthLoading(false);
+        return;
+      }
+
       setSession(nextSession);
       setIsAuthLoading(true);
 

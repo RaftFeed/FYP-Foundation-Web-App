@@ -43,6 +43,7 @@ import {
 } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import { fetchPaymentsSummaryByDay, fetchDailyPaymentsReport, Payment } from '../../lib/paymentsReports';
+import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { supabase } from '../../lib/supabase';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, TimeScale);
@@ -75,7 +76,8 @@ const emptySession = {
 
 export function AdminDashboard() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<AdminTab>('sessions');
+  const stateKeyPrefix = user ? `admin-dashboard:${user.id}` : null;
+  const [activeTab, setActiveTab] = usePersistentState<AdminTab>(stateKeyPrefix ? `${stateKeyPrefix}:active-tab` : null, 'sessions');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutors, setTutors] = useState<TutorProfile[]>([]);
   const [sessions, setSessions] = useState<CourseSession[]>([]);
@@ -83,19 +85,45 @@ export function AdminDashboard() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
-  const [subjectForm, setSubjectForm] = useState(emptySubject);
-  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
-  const [tutorForm, setTutorForm] = useState(emptyTutor);
-  const [editingTutorId, setEditingTutorId] = useState<string | null>(null);
-  const [sessionForm, setSessionForm] = useState(emptySession);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [subjectForm, setSubjectForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:subject-form` : null, emptySubject);
+  const [editingSubjectId, setEditingSubjectId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-subject-id` : null, null);
+  const [tutorForm, setTutorForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:tutor-form` : null, emptyTutor);
+  const [editingTutorId, setEditingTutorId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-tutor-id` : null, null);
+  const [sessionForm, setSessionForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:session-form` : null, emptySession);
+  const [editingSessionId, setEditingSessionId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-session-id` : null, null);
   const [paymentsSummary, setPaymentsSummary] = useState<Array<{ day: string; total: number }>>([]);
   const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
-  const [reportRangeDays, setReportRangeDays] = useState<number>(7);
-  const [reportDate, setReportDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [reportRangeDays, setReportRangeDays] = usePersistentState<number>(stateKeyPrefix ? `${stateKeyPrefix}:report-range-days` : null, 7);
+  const [reportDate, setReportDate] = usePersistentState<string>(stateKeyPrefix ? `${stateKeyPrefix}:report-date` : null, new Date().toISOString().slice(0, 10));
 
   const loadAdminData = async (daysParam?: number) => {
-    setIsLoading(true);
+    const effectiveRangeDays = daysParam ?? reportRangeDays;
+    const cacheKey = user ? `admin-dashboard:${user.id}:data` : null;
+    const cachedData = cacheKey
+      ? readLocalCache<{
+          subjects: Subject[];
+          tutors: TutorProfile[];
+          sessions: CourseSession[];
+          bookings: Booking[];
+          profiles: Profile[];
+          paymentsSummary: Array<{ day: string; total: number }>;
+          paymentsList: Payment[];
+        }>(cacheKey)
+      : null;
+
+    if (cachedData) {
+      setSubjects(cachedData.subjects);
+      setTutors(cachedData.tutors);
+      setSessions(cachedData.sessions);
+      setBookings(cachedData.bookings);
+      setProfiles(cachedData.profiles);
+      setPaymentsSummary(cachedData.paymentsSummary);
+      setPaymentsList(cachedData.paymentsList);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     try {
       const [nextSubjects, nextTutors, nextSessions, nextBookings, nextProfiles] = await Promise.all([
         fetchSubjects(),
@@ -112,7 +140,7 @@ export function AdminDashboard() {
       try {
         const endDate = new Date();
         const startDate = new Date();
-        startDate.setDate(endDate.getDate() - (reportRangeDays - 1));
+        startDate.setDate(endDate.getDate() - (effectiveRangeDays - 1));
         const fmt = (d: Date) => d.toISOString().slice(0, 10);
         const summary = await fetchPaymentsSummaryByDay(fmt(startDate), fmt(endDate));
         const mapped = (summary ?? []).map((row: any) => ({ day: String(row.day), total: Number(row.total) }));
@@ -121,6 +149,17 @@ export function AdminDashboard() {
         const daily = await fetchDailyPaymentsReport(fmt(endDate));
         console.debug('daily payments fetched', daily);
         setPaymentsList((daily ?? []) as Payment[]);
+        if (cacheKey) {
+          writeLocalCache(cacheKey, {
+            subjects: nextSubjects,
+            tutors: nextTutors,
+            sessions: nextSessions,
+            bookings: nextBookings,
+            profiles: nextProfiles,
+            paymentsSummary: mapped,
+            paymentsList: (daily ?? []) as Payment[],
+          });
+        }
       } catch (err) {
         console.error('Failed to load payment reports', err);
       }
@@ -404,7 +443,10 @@ export function AdminDashboard() {
             summary={paymentsSummary}
             payments={paymentsList}
             rangeDays={reportRangeDays}
-            onRangeChange={(days) => void loadAdminData(days)}
+            onRangeChange={(days) => {
+              setReportRangeDays(days);
+              void loadAdminData(days);
+            }}
             date={reportDate}
             onDateChange={(d) => {
               setReportDate(d);

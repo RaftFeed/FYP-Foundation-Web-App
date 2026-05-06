@@ -1,6 +1,7 @@
 import { BookOpen, CalendarDays, Clock3, LogOut, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { Subject, fetchSubjects, formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
 import {
   TutorAvailabilitySlot,
@@ -57,12 +58,13 @@ function getDisplayName(email?: string) {
 
 export function TutorDashboard() {
   const { user, signOut } = useAuth();
+  const stateKeyPrefix = user ? `tutor-dashboard:${user.id}` : null;
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [profile, setProfile] = useState<TutorSelfProfile | null>(null);
   const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
-  const [profileForm, setProfileForm] = useState(emptyProfileForm);
-  const [slotForm, setSlotForm] = useState(emptySlotForm);
-  const [selectedMonth, setSelectedMonth] = useState(monthValue(new Date()));
+  const [profileForm, setProfileForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:profile-form` : null, emptyProfileForm);
+  const [slotForm, setSlotForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:slot-form` : null, emptySlotForm);
+  const [selectedMonth, setSelectedMonth] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:selected-month` : null, monthValue(new Date()));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -74,7 +76,20 @@ export function TutorDashboard() {
       return;
     }
 
-    setIsLoading(true);
+    const cacheKey = `tutor-dashboard:${user.id}:meta`;
+    const cachedData = readLocalCache<{
+      subjects: Subject[];
+      profile: TutorSelfProfile | null;
+    }>(cacheKey);
+
+    if (cachedData) {
+      setSubjects(cachedData.subjects);
+      setProfile(cachedData.profile);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     try {
       const [nextSubjects, nextProfile] = await Promise.all([
         fetchSubjects(),
@@ -82,19 +97,23 @@ export function TutorDashboard() {
       ]);
       setSubjects(nextSubjects);
       setProfile(nextProfile);
+      writeLocalCache(cacheKey, {
+        subjects: nextSubjects,
+        profile: nextProfile,
+      });
 
       const defaultSubjectId = nextProfile?.subject_id ?? nextSubjects[0]?.id ?? '';
-      setProfileForm({
-        fullName: nextProfile?.full_name ?? getDisplayName(user.email),
-        subjectId: defaultSubjectId,
-        hourlyRate: nextProfile?.hourly_rate ?? 120000,
-        bio: nextProfile?.bio ?? '',
-        imageUrl: nextProfile?.image_url ?? '',
-      });
+      setProfileForm((current) => ({
+        fullName: current.fullName || nextProfile?.full_name || getDisplayName(user.email),
+        subjectId: current.subjectId || defaultSubjectId,
+        hourlyRate: current.hourlyRate || nextProfile?.hourly_rate || 120000,
+        bio: current.bio || nextProfile?.bio || '',
+        imageUrl: current.imageUrl || nextProfile?.image_url || '',
+      }));
       setSlotForm((current) => ({
         ...current,
         subjectId: current.subjectId || defaultSubjectId,
-        priceTotal: nextProfile?.hourly_rate ?? current.priceTotal,
+        priceTotal: current.priceTotal || nextProfile?.hourly_rate || 120000,
       }));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat dashboard tutor.');
@@ -108,9 +127,16 @@ export function TutorDashboard() {
       return;
     }
 
+    const cacheKey = `tutor-dashboard:${user.id}:slots:${selectedMonth}`;
+    const cachedSlots = readLocalCache<TutorAvailabilitySlot[]>(cacheKey);
+    if (cachedSlots) {
+      setSlots(cachedSlots);
+    }
+
     try {
       const nextSlots = await fetchMyTutorAvailability(user.id, monthRange.startIso, monthRange.endIso);
       setSlots(nextSlots);
+      writeLocalCache(cacheKey, nextSlots);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat jadwal tutor.');
     }

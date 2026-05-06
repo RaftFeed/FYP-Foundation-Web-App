@@ -1,6 +1,7 @@
 import { Banknote, CalendarDays, Clock3, Copy, CreditCard, Lock, RefreshCcw, Search, Users } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import {
   MatchmakingLobby,
   MatchmakingLobbyPayment,
@@ -38,14 +39,15 @@ const initialForm = {
 
 export function MatchmakingLobbyView() {
   const { user } = useAuth();
+  const stateKeyPrefix = user ? `matchmaking:${user.id}` : null;
   const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [lobbies, setLobbies] = useState<MatchmakingLobby[]>([]);
   const [payments, setPayments] = useState<MatchmakingLobbyPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [joinCode, setJoinCode] = useState('');
-  const [form, setForm] = useState(initialForm);
+  const [joinCode, setJoinCode] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:join-code` : null, '');
+  const [form, setForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:create-form` : null, initialForm);
 
   const selectedSlot = useMemo(
     () => slots.find((slot) => slot.id === form.availabilitySlotId) ?? null,
@@ -63,7 +65,22 @@ export function MatchmakingLobbyView() {
       return;
     }
 
-    setIsLoading(true);
+    const cacheKey = `matchmaking:${user.id}:data`;
+    const cachedData = readLocalCache<{
+      slots: TutorAvailabilitySlot[];
+      lobbies: MatchmakingLobby[];
+      payments: MatchmakingLobbyPayment[];
+    }>(cacheKey);
+
+    if (cachedData) {
+      setSlots(cachedData.slots);
+      setLobbies(cachedData.lobbies);
+      setPayments(cachedData.payments);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     try {
       const [nextSlots, nextLobbies, nextPayments] = await Promise.all([
         fetchAvailableTutorSlots(),
@@ -73,6 +90,11 @@ export function MatchmakingLobbyView() {
       setSlots(nextSlots);
       setLobbies(nextLobbies);
       setPayments(nextPayments);
+      writeLocalCache(cacheKey, {
+        slots: nextSlots,
+        lobbies: nextLobbies,
+        payments: nextPayments,
+      });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat fitur lobby grup.');
     } finally {

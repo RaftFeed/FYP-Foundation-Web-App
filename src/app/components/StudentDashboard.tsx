@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { MatchmakingLobbyView } from './MatchmakingLobbyView';
+import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import {
   Booking,
   CourseSession,
@@ -64,14 +65,15 @@ function getDisplayName(email?: string) {
 
 export function StudentDashboard() {
   const { user, signOut } = useAuth();
-  const [activeView, setActiveView] = useState<StudentView>('dashboard');
+  const stateKeyPrefix = user ? `student-dashboard:${user.id}` : null;
+  const [activeView, setActiveView] = usePersistentState<StudentView>(stateKeyPrefix ? `${stateKeyPrefix}:active-view` : null, 'dashboard');
+  const [query, setQuery] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:course-query` : null, '');
+  const [nameInput, setNameInput] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:name-input` : null, '');
   const [sessions, setSessions] = useState<CourseSession[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [nameInput, setNameInput] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
 
@@ -80,7 +82,22 @@ export function StudentDashboard() {
       return;
     }
 
-    setIsLoading(true);
+    const cacheKey = `student-dashboard:${user.id}:data`;
+    const cachedData = readLocalCache<{
+      sessions: CourseSession[];
+      bookings: Booking[];
+      profile: Profile | null;
+    }>(cacheKey);
+
+    if (cachedData) {
+      setSessions(cachedData.sessions);
+      setBookings(cachedData.bookings);
+      setProfile(cachedData.profile);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     try {
       const [nextSessions, nextBookings, nextProfile] = await Promise.all([
         fetchCourseSessions(),
@@ -90,6 +107,11 @@ export function StudentDashboard() {
       setSessions(nextSessions);
       setBookings(nextBookings);
       setProfile(nextProfile);
+      writeLocalCache(cacheKey, {
+        sessions: nextSessions,
+        bookings: nextBookings,
+        profile: nextProfile,
+      });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat data dashboard.');
     } finally {
@@ -102,10 +124,10 @@ export function StudentDashboard() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (profile?.full_name) {
+    if (profile?.full_name && !nameInput.trim()) {
       setNameInput(profile.full_name);
     }
-  }, [profile?.full_name]);
+  }, [nameInput, profile?.full_name, setNameInput]);
 
   const handleBook = async (sessionId: string) => {
     setNotice(null);
@@ -232,7 +254,7 @@ export function StudentDashboard() {
 
           {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} sessions={sessions} setQuery={setQuery} onBook={handleBook} />}
           {activeView === 'lobbies' && <MatchmakingLobbyView />}
-          {activeView === 'bookings' && <BookingsView bookings={bookings} onCancel={handleCancel} />}
+          {activeView === 'bookings' && <BookingsView bookings={bookings} onCancel={handleCancel} stateKeyPrefix={stateKeyPrefix} />}
           {activeView === 'schedule' && <TutorScheduleView sessions={sessions} />}
           {activeView === 'settings' && <SettingsView />}
           {activeView === 'profile' && (
@@ -429,8 +451,16 @@ function CoursesView({
   );
 }
 
-function BookingsView({ bookings, onCancel }: { bookings: Booking[]; onCancel: (bookingId: string) => void }) {
-  const [activeTab, setActiveTab] = useState('Semua');
+function BookingsView({
+  bookings,
+  onCancel,
+  stateKeyPrefix,
+}: {
+  bookings: Booking[];
+  onCancel: (bookingId: string) => void;
+  stateKeyPrefix: string | null;
+}) {
+  const [activeTab, setActiveTab] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:booking-tab` : null, 'Semua');
   const visibleBookings = activeTab === 'Semua' ? bookings : bookings.filter((booking) => bookingStatusLabel(booking.status) === activeTab);
 
   return (
