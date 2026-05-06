@@ -91,7 +91,10 @@ export function Footer() {
 
       <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
-          <p>&copy; 2026 FYP Foundation. Hak cipta dilindungi undang-undang.</p>
+          <div>
+            <p>&copy; 2026 FYP Foundation. Hak cipta dilindungi undang-undang.</p>
+            <p className="mt-1 text-xs text-gray-600">Live build refreshed via GitHub Pages.</p>
+          </div>
           <div className="flex gap-4">
             <a href="#" className="hover:text-gray-300 transition-colors">
               Privasi

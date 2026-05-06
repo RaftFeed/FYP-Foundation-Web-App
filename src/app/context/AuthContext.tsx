@@ -18,6 +18,12 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AUTH_CACHE_KEY = 'fyp-auth-snapshot';
+
+interface AuthSnapshot {
+  session: Session | null;
+  role: UserRole | null;
+}
 
 function normalizeRole(role: unknown): UserRole | null {
   if (role === 'student' || role === 'tutor' || role === 'admin') {
@@ -29,6 +35,51 @@ function normalizeRole(role: unknown): UserRole | null {
 
 function getRedirectUrl() {
   return `${window.location.origin}${import.meta.env.BASE_URL}`;
+}
+
+function readCachedAuthSnapshot(): AuthSnapshot | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(AUTH_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as AuthSnapshot;
+    return {
+      session: parsed.session ?? null,
+      role: normalizeRole(parsed.role),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAuthSnapshot(snapshot: AuthSnapshot) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearCachedAuthSnapshot() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(AUTH_CACHE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 async function getRoleForUser(user: User | null): Promise<UserRole | null> {
@@ -53,9 +104,10 @@ async function getRoleForUser(user: User | null): Promise<UserRole | null> {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<UserRole | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const cachedSnapshot = readCachedAuthSnapshot();
+  const [session, setSession] = useState<Session | null>(cachedSnapshot?.session ?? null);
+  const [role, setRole] = useState<UserRole | null>(cachedSnapshot?.role ?? null);
+  const [isAuthLoading, setIsAuthLoading] = useState(cachedSnapshot ? false : true);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,8 +124,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthError(error.message);
       }
 
-      setSession(data.session);
-      setRole(await getRoleForUser(data.session?.user ?? null));
+      const nextSession = data.session;
+      const nextRole = await getRoleForUser(nextSession?.user ?? null);
+      setSession(nextSession);
+      setRole(nextRole);
+      writeCachedAuthSnapshot({
+        session: nextSession,
+        role: nextRole,
+      });
       setIsAuthLoading(false);
     }
 
@@ -87,15 +145,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setRole(null);
+        clearCachedAuthSnapshot();
         setIsAuthLoading(false);
         return;
       }
 
       setSession(nextSession);
-      setIsAuthLoading(true);
+      if (!nextSession) {
+        setRole(null);
+        clearCachedAuthSnapshot();
+        setIsAuthLoading(false);
+        return;
+      }
 
       getRoleForUser(nextSession?.user ?? null)
-        .then((nextRole) => setRole(nextRole))
+        .then((nextRole) => {
+          setRole(nextRole);
+          writeCachedAuthSnapshot({
+            session: nextSession,
+            role: nextRole,
+          });
+        })
         .finally(() => setIsAuthLoading(false));
     });
 
