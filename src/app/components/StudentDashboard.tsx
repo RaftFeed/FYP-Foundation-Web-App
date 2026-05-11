@@ -36,7 +36,7 @@ import {
   updateProfileName,
   type Profile,
 } from '../../lib/dashboardData';
-import { MatchmakingLobby, TutorAvailabilitySlot, fetchAvailableTutorSlots, fetchMatchmakingLobbies, fetchStudentTutorScheduleSlots } from '../../lib/matchmakingData';
+import { MatchmakingLobby, TutorAvailabilitySlot, fetchAvailableTutorSlots, fetchMatchmakingLobbies, fetchStudentTutorScheduleSlots, leaveMatchmakingLobby } from '../../lib/matchmakingData';
 
 type StudentView = 'dashboard' | 'courses' | 'lobbies' | 'bookings' | 'schedule' | 'profile' | 'settings';
 
@@ -187,6 +187,17 @@ export function StudentDashboard() {
     }
   };
 
+  const handleLeaveLobby = async (lobbyId: string) => {
+    setNotice(null);
+    try {
+      await leaveMatchmakingLobby(lobbyId);
+      setNotice('Berhasil keluar dari lobby grup.');
+      await loadDashboard();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Gagal keluar dari lobby grup.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-secondary/40 text-foreground">
       <div className="grid min-h-screen lg:grid-cols-[248px_1fr]">
@@ -264,7 +275,15 @@ export function StudentDashboard() {
 
           {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} />}
           {activeView === 'lobbies' && <MatchmakingLobbyView onLobbyChange={() => void loadDashboard()} />}
-          {activeView === 'bookings' && <BookingsView bookings={bookings} joinedLobbies={joinedLobbies} onCancel={handleCancel} stateKeyPrefix={stateKeyPrefix} />}
+          {activeView === 'bookings' && (
+            <BookingsView
+              bookings={bookings}
+              joinedLobbies={joinedLobbies}
+              onCancel={handleCancel}
+              onLeaveLobby={handleLeaveLobby}
+              stateKeyPrefix={stateKeyPrefix}
+            />
+          )}
           {activeView === 'schedule' && <TutorScheduleView slots={scheduleTutorSlots} />}
           {activeView === 'settings' && <SettingsView />}
           {activeView === 'profile' && (
@@ -470,11 +489,13 @@ function BookingsView({
   bookings,
   joinedLobbies,
   onCancel,
+  onLeaveLobby,
   stateKeyPrefix,
 }: {
   bookings: Booking[];
   joinedLobbies: MatchmakingLobby[];
   onCancel: (bookingId: string) => void;
+  onLeaveLobby: (lobbyId: string) => void;
   stateKeyPrefix: string | null;
 }) {
   const [activeTab, setActiveTab] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:booking-tab` : null, 'Semua');
@@ -514,7 +535,7 @@ function BookingsView({
         <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
           {joinedLobbies.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Kamu belum bergabung ke lobby grup mana pun.</div>}
           {joinedLobbies.map((lobby) => (
-            <JoinedLobbyRow key={lobby.id} lobby={lobby} />
+            <JoinedLobbyRow key={lobby.id} lobby={lobby} onLeave={onLeaveLobby} />
           ))}
         </div>
       </div>
@@ -529,8 +550,9 @@ function BookingsView({
   );
 }
 
-function JoinedLobbyRow({ lobby }: { lobby: MatchmakingLobby }) {
+function JoinedLobbyRow({ lobby, onLeave }: { lobby: MatchmakingLobby; onLeave: (lobbyId: string) => void }) {
   const memberCount = lobby.member_count ?? 0;
+  const canLeave = lobby.status !== 'completed' && lobby.status !== 'cancelled';
 
   return (
     <article className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[92px_1fr_220px] lg:items-center">
@@ -553,6 +575,15 @@ function JoinedLobbyRow({ lobby }: { lobby: MatchmakingLobby }) {
         <p className="font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
         <p className="mt-1">Kode {lobby.code}</p>
         <p className="mt-1">{lobby.location}</p>
+        {canLeave && (
+          <button
+            type="button"
+            onClick={() => onLeave(lobby.id)}
+            className="mt-3 h-10 rounded-lg border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-300"
+          >
+            Keluar
+          </button>
+        )}
       </div>
     </article>
   );

@@ -125,3 +125,10 @@ C:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.t
 [2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/payment-report-schema.sql[22m
 [2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/matchmaking-schema.sql[22m
 [2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/matchmaking-core-feature.sql[22m
+[2m20.52.09[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/Header.tsx, /src/styles/index.css[22m
+[2m20.52.09[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/AuthPage.tsx, /src/styles/index.css[22m
+[2m20.56.00[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/app/components/StudentDashboard.tsx, /src/app/components/AdminDashboard.tsx[22m
+[2m20.56.00[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m22.01.32[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m22.02.07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/database-schema.sql[22m
+[2m22.02.07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m

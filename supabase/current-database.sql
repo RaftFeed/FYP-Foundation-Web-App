@@ -72,6 +72,7 @@ CREATE TABLE public.matchmaking_lobby_members (
   status USER-DEFINED NOT NULL DEFAULT 'active'::matchmaking_lobby_member_status,
   joined_at timestamp with time zone NOT NULL DEFAULT now(),
   left_at timestamp with time zone,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT matchmaking_lobby_members_pkey PRIMARY KEY (id),
   CONSTRAINT matchmaking_lobby_members_lobby_id_fkey FOREIGN KEY (lobby_id) REFERENCES public.matchmaking_lobbies(id),
   CONSTRAINT matchmaking_lobby_members_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)

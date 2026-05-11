@@ -450,6 +450,28 @@ export async function cancelMatchmakingLobby(lobbyId: string) {
   throwIfError(error);
 }
 
+export async function leaveMatchmakingLobby(lobbyId: string) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  throwIfError(authError);
+
+  const currentUserId = authData.user?.id;
+  if (!currentUserId) {
+    throw new Error('You must be signed in to leave a lobby.');
+  }
+
+  const { error } = await supabase
+    .from('matchmaking_lobby_members')
+    .update({
+      status: 'left',
+      left_at: new Date().toISOString(),
+    })
+    .eq('lobby_id', lobbyId)
+    .eq('student_id', currentUserId)
+    .eq('status', 'active');
+
+  throwIfError(error);
+}
+
 export async function fetchMyTutorProfile(userId: string) {
   const { data, error } = await supabase
     .from('tutor_profiles')

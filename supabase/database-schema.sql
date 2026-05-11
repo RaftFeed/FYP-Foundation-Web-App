@@ -221,6 +221,7 @@ create table if not exists public.matchmaking_lobby_members (
   status public.matchmaking_lobby_member_status not null default 'active',
   joined_at timestamptz not null default now(),
   left_at timestamptz,
+  updated_at timestamptz not null default now(),
   unique (lobby_id, student_id)
 );
 
