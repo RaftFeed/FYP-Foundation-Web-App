@@ -4,54 +4,34 @@ import { useAuth } from '../context/AuthContext';
 import {
   Booking,
   BookingStatus,
-  CourseSession,
   Profile,
-  SessionStatus,
   Subject,
   TutorProfile,
   TutorStatus,
   UserRole,
   bookingStatusLabel,
-  deleteCourseSession,
   deleteSubject,
   deleteTutorProfile,
   fetchAdminBookings,
-  fetchAdminCourseSessions,
   fetchProfiles,
   fetchSubjects,
   fetchTutorProfiles,
   formatCurrency,
   formatDate,
   formatTimeRange,
-  sessionStatusLabel,
   updateBookingStatus,
   updateProfileRole,
-  upsertCourseSession,
   upsertSubject,
   upsertTutorProfile,
 } from '../../lib/dashboardData';
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  TimeScale,
-} from 'chart.js';
-import 'chartjs-adapter-date-fns';
-import { fetchPaymentsSummaryByDay, fetchDailyPaymentsReport, Payment } from '../../lib/paymentsReports';
+import { TutorAvailabilitySlot, fetchAdminTutorAvailability } from '../../lib/matchmakingData';
+import { Report, fetchReports } from '../../lib/paymentsReports';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
-import { supabase } from '../../lib/supabase';
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, TimeScale);
 
 type AdminTab = 'sessions' | 'tutors' | 'subjects' | 'bookings' | 'users' | 'reports';
 
 const tabs: Array<{ id: AdminTab; label: string }> = [
-  { id: 'sessions', label: 'Sessions' },
+  { id: 'sessions', label: 'Tutor Slots' },
   { id: 'tutors', label: 'Tutors' },
   { id: 'subjects', label: 'Subjects' },
   { id: 'bookings', label: 'Bookings' },
@@ -61,18 +41,6 @@ const tabs: Array<{ id: AdminTab; label: string }> = [
 
 const emptySubject = { name: '', code: '', description: '' };
 const emptyTutor = { full_name: '', subject_id: '', hourly_rate: 0, rating: 0, reviews_count: 0, image_url: '', bio: '', status: 'pending' as TutorStatus };
-const emptySession = {
-  tutor_profile_id: '',
-  subject_id: '',
-  code: '',
-  title: '',
-  starts_at: '',
-  ends_at: '',
-  price_per_seat: 0,
-  capacity: 4,
-  location: 'Online',
-  status: 'scheduled' as SessionStatus,
-};
 
 export function AdminDashboard() {
   const { user, signOut } = useAuth();
@@ -80,88 +48,66 @@ export function AdminDashboard() {
   const [activeTab, setActiveTab] = usePersistentState<AdminTab>(stateKeyPrefix ? `${stateKeyPrefix}:active-tab` : null, 'sessions');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutors, setTutors] = useState<TutorProfile[]>([]);
-  const [sessions, setSessions] = useState<CourseSession[]>([]);
+  const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [subjectForm, setSubjectForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:subject-form` : null, emptySubject);
   const [editingSubjectId, setEditingSubjectId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-subject-id` : null, null);
   const [tutorForm, setTutorForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:tutor-form` : null, emptyTutor);
   const [editingTutorId, setEditingTutorId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-tutor-id` : null, null);
-  const [sessionForm, setSessionForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:session-form` : null, emptySession);
-  const [editingSessionId, setEditingSessionId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-session-id` : null, null);
-  const [paymentsSummary, setPaymentsSummary] = useState<Array<{ day: string; total: number }>>([]);
-  const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
-  const [reportRangeDays, setReportRangeDays] = usePersistentState<number>(stateKeyPrefix ? `${stateKeyPrefix}:report-range-days` : null, 7);
-  const [reportDate, setReportDate] = usePersistentState<string>(stateKeyPrefix ? `${stateKeyPrefix}:report-date` : null, new Date().toISOString().slice(0, 10));
 
-  const loadAdminData = async (daysParam?: number) => {
-    const effectiveRangeDays = daysParam ?? reportRangeDays;
-    const cacheKey = user ? `admin-dashboard:${user.id}:data` : null;
+  const loadAdminData = async () => {
+    const cacheKey = user ? `admin-dashboard:${user.id}:data:v2` : null;
     const cachedData = cacheKey
       ? readLocalCache<{
           subjects: Subject[];
           tutors: TutorProfile[];
-          sessions: CourseSession[];
+          slots: TutorAvailabilitySlot[];
           bookings: Booking[];
           profiles: Profile[];
-          paymentsSummary: Array<{ day: string; total: number }>;
-          paymentsList: Payment[];
+          reports: Report[];
         }>(cacheKey)
       : null;
 
     if (cachedData) {
       setSubjects(cachedData.subjects);
       setTutors(cachedData.tutors);
-      setSessions(cachedData.sessions);
+      setSlots(cachedData.slots);
       setBookings(cachedData.bookings);
       setProfiles(cachedData.profiles);
-      setPaymentsSummary(cachedData.paymentsSummary);
-      setPaymentsList(cachedData.paymentsList);
+      setReports(cachedData.reports);
       setIsLoading(false);
     } else {
       setIsLoading(true);
     }
 
     try {
-      const [nextSubjects, nextTutors, nextSessions, nextBookings, nextProfiles] = await Promise.all([
+      const [nextSubjects, nextTutors, nextSlots, nextBookings, nextProfiles, nextReports] = await Promise.all([
         fetchSubjects(),
         fetchTutorProfiles(),
-        fetchAdminCourseSessions(),
+        fetchAdminTutorAvailability(),
         fetchAdminBookings(),
         fetchProfiles(),
+        fetchReports(),
       ]);
       setSubjects(nextSubjects);
       setTutors(nextTutors);
-      setSessions(nextSessions);
+      setSlots(nextSlots);
       setBookings(nextBookings);
       setProfiles(nextProfiles);
-      try {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - (effectiveRangeDays - 1));
-        const fmt = (d: Date) => d.toISOString().slice(0, 10);
-        const summary = await fetchPaymentsSummaryByDay(fmt(startDate), fmt(endDate));
-        const mapped = (summary ?? []).map((row: any) => ({ day: String(row.day), total: Number(row.total) }));
-        console.debug('payments summary fetched', mapped);
-        setPaymentsSummary(mapped);
-        const daily = await fetchDailyPaymentsReport(fmt(endDate));
-        console.debug('daily payments fetched', daily);
-        setPaymentsList((daily ?? []) as Payment[]);
-        if (cacheKey) {
-          writeLocalCache(cacheKey, {
-            subjects: nextSubjects,
-            tutors: nextTutors,
-            sessions: nextSessions,
-            bookings: nextBookings,
-            profiles: nextProfiles,
-            paymentsSummary: mapped,
-            paymentsList: (daily ?? []) as Payment[],
-          });
-        }
-      } catch (err) {
-        console.error('Failed to load payment reports', err);
+      setReports(nextReports);
+      if (cacheKey) {
+        writeLocalCache(cacheKey, {
+          subjects: nextSubjects,
+          tutors: nextTutors,
+          slots: nextSlots,
+          bookings: nextBookings,
+          profiles: nextProfiles,
+          reports: nextReports,
+        });
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal memuat admin dashboard.');
@@ -174,36 +120,14 @@ export function AdminDashboard() {
     void loadAdminData();
   }, []);
 
-  // Subscribe to payments table realtime changes when Reports tab is active
-  useEffect(() => {
-    if (activeTab !== 'reports') return;
-
-    const channel = supabase.channel('public:payments');
-    channel.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'payments' },
-      (payload) => {
-        console.debug('realtime payments change', payload);
-        // refresh reports using current range
-        void loadAdminData(reportRangeDays);
-      },
-    );
-
-    void channel.subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [activeTab, reportRangeDays]);
-
   const stats = useMemo(
     () => [
       { label: 'Total Students', value: String(profiles.filter((profile) => profile.role === 'student').length), icon: Users },
       { label: 'Active Tutors', value: String(tutors.filter((tutor) => tutor.status === 'approved').length), icon: GraduationCap },
       { label: 'Courses Listed', value: String(subjects.length), icon: BookOpen },
-      { label: 'Sessions', value: String(sessions.length), icon: CalendarDays },
+      { label: 'Tutor Slots', value: String(slots.length), icon: CalendarDays },
     ],
-    [profiles, sessions, subjects, tutors],
+    [profiles, slots, subjects, tutors],
   );
   const handleTutorSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -220,21 +144,6 @@ export function AdminDashboard() {
       setTutorForm(emptyTutor);
       setEditingTutorId(null);
     }, 'Tutor saved.');
-  };
-
-  const handleSessionSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    await runAdminAction(async () => {
-      await upsertCourseSession({
-        id: editingSessionId ?? undefined,
-        ...sessionForm,
-        price_per_seat: Number(sessionForm.price_per_seat),
-        capacity: Number(sessionForm.capacity),
-        location: sessionForm.location || null,
-      });
-      setSessionForm(emptySession);
-      setEditingSessionId(null);
-    }, 'Session saved.');
   };
 
   const handleSubjectSubmit = async (event: FormEvent) => {
@@ -346,35 +255,7 @@ export function AdminDashboard() {
         </div>
 
         {activeTab === 'sessions' && (
-          <SessionsPanel
-            form={sessionForm}
-            sessions={sessions}
-            subjects={subjects}
-            tutors={tutors}
-            editingId={editingSessionId}
-            onSubmit={handleSessionSubmit}
-            onChange={setSessionForm}
-            onEdit={(session) => {
-              setEditingSessionId(session.id);
-              setSessionForm({
-                tutor_profile_id: session.tutor_profile_id,
-                subject_id: session.subject_id,
-                code: session.code,
-                title: session.title,
-                starts_at: toInputDate(session.starts_at),
-                ends_at: toInputDate(session.ends_at),
-                price_per_seat: session.price_per_seat,
-                capacity: session.capacity,
-                location: session.location ?? '',
-                status: session.status,
-              });
-            }}
-            onDelete={(id) => runAdminAction(() => deleteCourseSession(id), 'Session deleted.')}
-            onCancel={() => {
-              setEditingSessionId(null);
-              setSessionForm(emptySession);
-            }}
-          />
+          <AvailabilityPanel slots={slots} />
         )}
 
         {activeTab === 'tutors' && (
@@ -439,27 +320,7 @@ export function AdminDashboard() {
           />
         )}
         {activeTab === 'reports' && (
-          <ReportsPanel
-            summary={paymentsSummary}
-            payments={paymentsList}
-            rangeDays={reportRangeDays}
-            onRangeChange={(days) => {
-              setReportRangeDays(days);
-              void loadAdminData(days);
-            }}
-            date={reportDate}
-            onDateChange={(d) => {
-              setReportDate(d);
-              void (async () => {
-                try {
-                  const daily = await fetchDailyPaymentsReport(d);
-                  setPaymentsList(daily ?? []);
-                } catch (err) {
-                  console.error(err);
-                }
-              })();
-            }}
-          />
+          <ReportsPanel reports={reports} />
         )}
       </main>
     </div>
@@ -565,68 +426,19 @@ function TutorsPanel({
   );
 }
 
-function SessionsPanel({
-  editingId,
-  form,
-  onCancel,
-  onChange,
-  onDelete,
-  onEdit,
-  onSubmit,
-  sessions,
-  subjects,
-  tutors,
-}: {
-  editingId: string | null;
-  form: typeof emptySession;
-  onCancel: () => void;
-  onChange: (form: typeof emptySession) => void;
-  onDelete: (id: string) => void;
-  onEdit: (session: CourseSession) => void;
-  onSubmit: (event: FormEvent) => void;
-  sessions: CourseSession[];
-  subjects: Subject[];
-  tutors: TutorProfile[];
-}) {
+function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
   return (
-    <section className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
-      <AdminForm title={editingId ? 'Edit Session' : 'Add Session'} onSubmit={onSubmit} onCancel={editingId ? onCancel : undefined}>
-        <TextInput label="Title" value={form.title} onChange={(value) => onChange({ ...form, title: value })} required />
-        <TextInput label="Code" value={form.code} onChange={(value) => onChange({ ...form, code: value })} required />
-        <SelectInput label="Subject" value={form.subject_id} onChange={(value) => onChange({ ...form, subject_id: value })} required>
-          <option value="">Choose subject</option>
-          {subjects.map((subject) => (
-            <option key={subject.id} value={subject.id}>{subject.name}</option>
-          ))}
-        </SelectInput>
-        <SelectInput label="Tutor" value={form.tutor_profile_id} onChange={(value) => onChange({ ...form, tutor_profile_id: value })} required>
-          <option value="">Choose tutor</option>
-          {tutors.map((tutor) => (
-            <option key={tutor.id} value={tutor.id}>{tutor.full_name}</option>
-          ))}
-        </SelectInput>
-        <TextInput label="Starts At" type="datetime-local" value={form.starts_at} onChange={(value) => onChange({ ...form, starts_at: value })} required />
-        <TextInput label="Ends At" type="datetime-local" value={form.ends_at} onChange={(value) => onChange({ ...form, ends_at: value })} required />
-        <TextInput label="Price" type="number" value={String(form.price_per_seat)} onChange={(value) => onChange({ ...form, price_per_seat: Number(value) })} />
-        <TextInput label="Capacity" type="number" value={String(form.capacity)} onChange={(value) => onChange({ ...form, capacity: Number(value) })} />
-        <TextInput label="Location" value={form.location} onChange={(value) => onChange({ ...form, location: value })} />
-        <SelectInput label="Status" value={form.status} onChange={(value) => onChange({ ...form, status: value as SessionStatus })}>
-          <option value="scheduled">Scheduled</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </SelectInput>
-      </AdminForm>
-
-      <DataTable headers={['Code', 'Subject', 'Tutor', 'Schedule', 'Price', 'Status', 'Actions']}>
-        {sessions.map((session) => (
-          <tr key={session.id}>
-            <Cell strong>{session.code}</Cell>
-            <Cell>{session.subject_name}</Cell>
-            <Cell>{session.tutor_name}</Cell>
-            <Cell>{formatDate(session.starts_at)} {formatTimeRange(session.starts_at, session.ends_at)}</Cell>
-            <Cell>{formatCurrency(session.price_per_seat)}</Cell>
-            <Cell>{sessionStatusLabel(session.status)}</Cell>
-            <ActionCell onEdit={() => onEdit(session)} onDelete={() => onDelete(session.id)} />
+    <section className="mt-6">
+      <DataTable headers={['Subject', 'Tutor', 'Schedule', 'Location', 'Total Price', 'Capacity', 'Status']}>
+        {slots.map((slot) => (
+          <tr key={slot.id}>
+            <Cell strong>{slot.subject_name}</Cell>
+            <Cell>{slot.tutor_name}</Cell>
+            <Cell>{formatDate(slot.starts_at)} {formatTimeRange(slot.starts_at, slot.ends_at)}</Cell>
+            <Cell>{slot.location}</Cell>
+            <Cell>{formatCurrency(slot.price_total)}</Cell>
+            <Cell>{slot.max_participants} siswa</Cell>
+            <Cell>{slot.status}</Cell>
           </tr>
         ))}
       </DataTable>
@@ -688,101 +500,20 @@ function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleCha
   );
 }
 
-function ReportsPanel({
-  summary,
-  payments,
-  rangeDays,
-  onRangeChange,
-  date,
-  onDateChange,
-}: {
-  summary: Array<{ day: string; total: number }>;
-  payments: Payment[];
-  rangeDays: number;
-  onRangeChange: (days: number) => void;
-  date: string;
-  onDateChange: (d: string) => void;
-}) {
-  const totalRevenue = payments.reduce((s, p) => s + Number(p.amount), 0);
-  const totalCount = payments.length;
-
-  const chartData = {
-    labels: summary.map((s) => s.day),
-    datasets: [
-      {
-        label: 'Pendapatan (IDR)',
-        data: summary.map((s) => Number(s.total)),
-        borderColor: '#2563EB',
-        backgroundColor: 'rgba(37,99,235,0.08)',
-        tension: 0.3,
-      },
-    ],
-  };
-
-  const chartOptions: any = {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: { mode: 'index', intersect: false },
-    },
-    scales: {
-      x: { type: 'time', time: { unit: rangeDays <= 7 ? 'day' : 'day' } },
-      y: { beginAtZero: true },
-    },
-  };
-
+function ReportsPanel({ reports }: { reports: Report[] }) {
   return (
-    <section className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
-      <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-lg font-extrabold">Reports</h2>
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-border bg-secondary/40 p-3">
-            <p className="text-sm text-muted-foreground">Revenue Today</p>
-            <p className="mt-1 text-lg font-extrabold">{formatCurrency(totalRevenue)}</p>
-            <p className="text-xs text-muted-foreground">{totalCount} transactions</p>
-          </div>
-          <div className="rounded-lg border border-border bg-secondary/40 p-3">
-            <p className="text-sm text-muted-foreground">Selected Day</p>
-            <input type="date" value={date} onChange={(e) => onDateChange(e.target.value)} className="mt-1 w-full rounded-lg border border-primary/20 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div className="mb-3 flex gap-2">
-          <button onClick={() => onRangeChange(7)} className={`h-9 rounded-lg px-3 text-sm font-semibold ${rangeDays === 7 ? 'bg-primary text-white' : 'border border-border text-primary'}`}>7 Hari</button>
-          <button onClick={() => onRangeChange(30)} className={`h-9 rounded-lg px-3 text-sm font-semibold ${rangeDays === 30 ? 'bg-primary text-white' : 'border border-border text-primary'}`}>30 Hari</button>
-          <button onClick={() => onRangeChange(90)} className={`h-9 rounded-lg px-3 text-sm font-semibold ${rangeDays === 90 ? 'bg-primary text-white' : 'border border-border text-primary'}`}>90 Hari</button>
-        </div>
-      </div>
-
-      <div>
-        <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
-          <Line data={chartData} options={chartOptions} />
-        </div>
-
-        <div className="mt-6 rounded-lg border border-border bg-white p-5 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">Transactions ({date})</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted text-muted-foreground"><tr><th className="px-4 py-3">ID</th><th className="px-4 py-3">Booking</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Method</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Paid At</th></tr></thead>
-              <tbody className="divide-y divide-border">
-                {payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="px-4 py-3">{p.id.slice(0, 8)}</td>
-                    <td className="px-4 py-3">{p.booking_id.slice(0, 8)}</td>
-                    <td className="px-4 py-3">{formatCurrency(Number(p.amount))}</td>
-                    <td className="px-4 py-3">{p.payment_method}</td>
-                    <td className="px-4 py-3">{p.status}</td>
-                    <td className="px-4 py-3">{p.paid_at ? formatDate(p.paid_at) : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 text-xs text-muted-foreground">
-            <pre className="max-h-40 overflow-auto text-xs">{JSON.stringify({summary, payments}, null, 2)}</pre>
-          </div>
-        </div>
-      </div>
+    <section className="mt-6">
+      <DataTable headers={['Type', 'Period Start', 'Period End', 'Created', 'Data Preview']}>
+        {reports.map((report) => (
+          <tr key={report.id}>
+            <Cell strong>{report.report_type}</Cell>
+            <Cell>{report.period_start}</Cell>
+            <Cell>{report.period_end}</Cell>
+            <Cell>{formatDate(report.created_at)}</Cell>
+            <Cell>{formatReportData(report.data)}</Cell>
+          </tr>
+        ))}
+      </DataTable>
     </section>
   );
 }
@@ -914,9 +645,11 @@ function SelectInput({
   );
 }
 
-function toInputDate(value: string) {
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
+function formatReportData(data: unknown) {
+  if (!data) {
+    return '-';
+  }
+
+  const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+  return serialized.length > 80 ? `${serialized.slice(0, 80)}...` : serialized;
 }

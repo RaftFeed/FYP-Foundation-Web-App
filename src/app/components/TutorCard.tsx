@@ -1,17 +1,21 @@
 import { Star, BookOpen, Users, CheckCircle2 } from 'lucide-react';
 
+const DEFAULT_TUTOR_IMAGE =
+  'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=200&h=200&fit=crop&crop=faces';
+
 interface TutorCardProps {
   name: string;
   subject: string;
   rating: number;
   reviews: number;
   hourlyRate: number;
-  imageUrl: string;
+  imageUrl?: string | null;
   verified?: boolean;
 }
 
 export function TutorCard({ name, subject, rating, reviews, hourlyRate, imageUrl, verified = true }: TutorCardProps) {
   const isTopRated = rating >= 4.8;
+  const displayImageUrl = imageUrl || DEFAULT_TUTOR_IMAGE;
 
   return (
     <div className="bg-white rounded-2xl border border-border hover:border-primary hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group">
@@ -21,7 +25,7 @@ export function TutorCard({ name, subject, rating, reviews, hourlyRate, imageUrl
         <div className="flex items-start gap-4 mb-4">
           <div className="relative shrink-0">
             <img
-              src={imageUrl}
+              src={displayImageUrl}
               alt={name}
               className="w-16 h-16 rounded-2xl object-cover border-2 border-border group-hover:border-primary transition-colors"
             />

@@ -1,0 +1,127 @@
+
+> fyp-foundation-web-app@0.0.1 dev
+> vite --host 127.0.0.1 --port 5173
+
+
+  [32m[1mVITE[22m v6.4.2[39m  [2mready in [0m[1m310[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m19.28.56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/database-schema.sql[22m
+[2m19.29.03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m19.29.47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m19.29.47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/context/AuthContext.tsx, /src/styles/index.css[22m
+[2m19.29.47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/database-schema.sql[22m
+[2m19.29.47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [33mhmr invalidate [39m[2m/src/app/context/AuthContext.tsx[22m Could not Fast Refresh ("useAuth" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m19.29.47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/TutorDashboard.tsx, /src/app/components/AuthPage.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/StudentDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m19.35.53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/TutorDashboard.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/StudentDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m19.36.05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m19.36.43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m19.36.51[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m19.37.06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/database-schema.sql[22m
+[2m19.37.12[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m19.54.22[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m19.54.23[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Transform failed with 1 error:
+C:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.ts:252:51: ERROR: "await" can only be used inside an "async" function
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.ts[39m:252:51
+[33m  
+  [33m"await" can only be used inside an "async" function[33m
+  250|      payment_due_at: lobby.payment_due_at,
+  251|      current_user_is_member: activeMemberships.has(lobby.id),
+  252|      current_user_is_creator: lobby.creator_id === (await supabase.auth.getUser()).data.user?.id,
+     |                                                     ^
+  253|      created_at: lobby.created_at,
+  254|      updated_at: lobby.updated_at,
+  [39m
+[2m19.54.24[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Transform failed with 1 error:
+C:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.ts:252:51: ERROR: "await" can only be used inside an "async" function
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.ts[39m:252:51
+[33m  
+  [33m"await" can only be used inside an "async" function[33m
+  250|      payment_due_at: lobby.payment_due_at,
+  251|      current_user_is_member: activeMemberships.has(lobby.id),
+  252|      current_user_is_creator: lobby.creator_id === (await supabase.auth.getUser()).data.user?.id,
+     |                                                     ^
+  253|      created_at: lobby.created_at,
+  254|      updated_at: lobby.updated_at,
+  [39m
+[2m19.54.24[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 1 error:
+C:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.ts:252:51: ERROR: "await" can only be used inside an "async" function[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Rafid/Downloads/_Repos/FYP Foundation Web App/src/lib/matchmakingData.ts[39m:252:51
+[33m  
+  [33m"await" can only be used inside an "async" function[33m
+  250|      payment_due_at: lobby.payment_due_at,
+  251|      current_user_is_member: activeMemberships.has(lobby.id),
+  252|      current_user_is_creator: lobby.creator_id === (await supabase.auth.getUser()).data.user?.id,
+     |                                                     ^
+  253|      created_at: lobby.created_at,
+  254|      updated_at: lobby.updated_at,
+  [39m
+      at failureErrorWithLog (C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\node_modules\esbuild\lib\main.js:1467:15)
+      at C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\node_modules\esbuild\lib\main.js:736:50
+      at responseCallbacks.<computed> (C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\node_modules\esbuild\lib\main.js:603:9)
+      at handleIncomingPacket (C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\node_modules\esbuild\lib\main.js:658:12)
+      at Socket.readFromStdout (C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\node_modules\esbuild\lib\main.js:581:7)
+      at Socket.emit (node:events:508:28)
+      at addChunk (node:internal/streams/readable:559:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+      at Readable.push (node:internal/streams/readable:390:5)
+      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+[2m19.54.33[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m19.55.07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m19.59.15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/TutorDashboard.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/StudentDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m20.04.48[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m20.05.04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/lean-mvp-schema.md[22m
+[2m20.05.04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/lean-mvp-drop-tables.sql[22m
+[2m20.06.49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m20.06.57[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.08.49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/remove-payments-features.sql[22m
+[2m20.09.57[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m20.11.53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/remove-payments-features.sql[22m
+[2m20.13.09[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.13.46[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m20.14.26[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.14.37[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/TutorDashboard.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/StudentDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m20.15.02[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.19.55[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.20.52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.22.03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/app/components/StudentDashboard.tsx[22m
+[2m20.22.37[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.22.42[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.22.58[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.23.03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.23.10[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.29.12[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m20.30.43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.31.28[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/AdminDashboard.tsx[22m
+[2m20.31.29[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/TutorDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/app/components/StudentDashboard.tsx[22m
+[2m20.31.29[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/TutorDashboard.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/StudentDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m20.32.30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/AdminDashboard.tsx, /src/styles/index.css[22m
+[2m20.33.24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/AdminDashboard.tsx, /src/styles/index.css[22m
+[2m20.34.27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/TutorDashboard.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/StudentDashboard.tsx, /@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx[22m
+[2m20.35.06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m20.35.47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.35.53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/current-database.sql[22m
+[2m20.35.53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.37.27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.37.44[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\Users\Rafid\Downloads\_Repos\FYP Foundation Web App\src\app\components\MatchmakingLobbyView.tsx, /src/styles/index.css[22m
+[2m20.40.31[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/bookings-course-sessions-migration.sql[22m
+[2m20.40.49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/bookings-course-sessions-migration.sql[22m
+[2m20.40.58[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/remove-payments-features.sql[22m
+[2m20.40.58[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/seed-demo-data.sql[22m
+[2m20.42.06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.45.26[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/AuthPage.tsx, /src/styles/index.css[22m
+[2m20.45.52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.46.22[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/AuthPage.tsx, /src/styles/index.css[22m
+[2m20.47.49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/StudentDashboard.tsx, /src/styles/index.css[22m
+[2m20.49.05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/Header.tsx, /src/styles/index.css[22m
+[2m20.51.07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/Header.tsx, /src/styles/index.css[22m
+[2m20.51.58[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/tutor-profile-profiles-reference.sql[22m
+[2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/student-preferences-schema.sql[22m
+[2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/seed-payments-dummy.sql[22m
+[2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/payment-report-schema.sql[22m
+[2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/matchmaking-schema.sql[22m
+[2m20.51.59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msupabase/matchmaking-core-feature.sql[22m

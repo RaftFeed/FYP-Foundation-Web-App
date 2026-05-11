@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 
 export type UserRole = 'student' | 'tutor' | 'admin';
+const DEFAULT_SIGNUP_ROLE: Exclude<UserRole, 'admin'> = 'student';
 
 interface AuthContextValue {
   session: Session | null;
@@ -12,7 +13,7 @@ interface AuthContextValue {
   authError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, role: Exclude<UserRole, 'admin'>) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearAuthError: () => void;
 }
@@ -201,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string, fullName: string, selectedRole: Exclude<UserRole, 'admin'>) => {
+    async (email: string, password: string, fullName: string) => {
       setAuthError(null);
 
       const cleanedEmail = email.trim();
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             full_name: cleanedFullName,
             name: cleanedFullName,
-            role: selectedRole,
+            role: DEFAULT_SIGNUP_ROLE,
           },
         },
       });

@@ -38,7 +38,8 @@ const emptySlotForm = {
   location: 'Online',
   meetingUrl: '',
   notes: '',
-  repeatWeekly: false,
+  repeatMode: 'once' as 'once' | 'weekly',
+  repeatWeeks: 4,
 };
 
 function monthValue(date: Date) {
@@ -70,6 +71,7 @@ export function TutorDashboard() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const monthRange = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
+  const slotRepeatMode = slotForm.repeatMode === 'weekly' || Boolean((slotForm as typeof emptySlotForm & { repeatWeekly?: boolean }).repeatWeekly) ? 'weekly' : 'once';
 
   const loadTutorData = async () => {
     if (!user) {
@@ -189,9 +191,11 @@ export function TutorDashboard() {
     setIsSaving(true);
     setNotice(null);
     try {
-      const occurrences = buildSlotOccurrences(slotForm.date, slotForm.startTime, slotForm.endTime, slotForm.repeatWeekly);
+      const repeatWeeks = Math.min(Math.max(Number(slotForm.repeatWeeks) || 1, 1), 12);
+      const occurrences = buildSlotOccurrences(slotForm.date, slotForm.startTime, slotForm.endTime, slotRepeatMode, repeatWeeks);
+      const recurrenceGroupId = slotRepeatMode === 'weekly' && occurrences.length > 1 ? createClientId() : null;
 
-      for (const occurrence of occurrences) {
+      for (const [index, occurrence] of occurrences.entries()) {
         await createTutorAvailability({
           subjectId: slotForm.subjectId,
           startsAt: occurrence.startsAt,
@@ -201,10 +205,13 @@ export function TutorDashboard() {
           location: slotForm.location,
           meetingUrl: slotForm.meetingUrl,
           notes: slotForm.notes,
+          recurrenceGroupId,
+          recurrencePattern: recurrenceGroupId ? 'weekly' : 'none',
+          recurrenceIndex: recurrenceGroupId ? index : 0,
         });
       }
 
-      setNotice(slotForm.repeatWeekly ? `${occurrences.length} slot mingguan berhasil dibuat.` : 'Slot jadwal berhasil dibuat.');
+      setNotice(recurrenceGroupId ? `${occurrences.length} slot mingguan berhasil dibuat.` : 'Slot jadwal berhasil dibuat.');
       await loadSlots();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Gagal membuat slot jadwal.');
@@ -334,7 +341,7 @@ export function TutorDashboard() {
                 </div>
                 <div>
                   <h2 className="text-lg font-extrabold tracking-normal text-foreground">Tambah Slot</h2>
-                  <p className="text-xs font-medium text-muted-foreground">Bisa diulang mingguan dalam bulan yang sama</p>
+                  <p className="text-xs font-medium text-muted-foreground">Bisa dibuat sekali atau diulang mingguan</p>
                 </div>
               </div>
 
@@ -364,15 +371,24 @@ export function TutorDashboard() {
                   className="w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </label>
-              <label className="mb-4 flex items-center gap-3 rounded-lg border border-primary/10 bg-secondary p-3 text-sm font-semibold text-foreground">
-                <input
-                  type="checkbox"
-                  checked={slotForm.repeatWeekly}
-                  onChange={(event) => setSlotForm({ ...slotForm, repeatWeekly: event.target.checked })}
-                  className="h-4 w-4 accent-primary"
-                />
-                Ulangi setiap minggu sampai akhir bulan
-              </label>
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <TutorSelect
+                  label="Pola jadwal"
+                  value={slotRepeatMode}
+                  onChange={(value) => setSlotForm({ ...slotForm, repeatMode: value === 'weekly' ? 'weekly' : 'once' })}
+                >
+                  <option value="once">Sekali saja</option>
+                  <option value="weekly">Ulang mingguan</option>
+                </TutorSelect>
+                {slotRepeatMode === 'weekly' && (
+                  <TutorTextInput
+                    label="Jumlah minggu"
+                    type="number"
+                    value={String(slotForm.repeatWeeks ?? 4)}
+                    onChange={(value) => setSlotForm({ ...slotForm, repeatWeeks: Number(value) })}
+                  />
+                )}
+              </div>
               <button
                 type="submit"
                 disabled={isSaving}
@@ -414,6 +430,11 @@ export function TutorDashboard() {
                       <span className="mb-2 inline-flex rounded-md border border-primary/20 bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">
                         {slotStatusLabels[slot.status]}
                       </span>
+                      {slot.recurrence_pattern === 'weekly' && (
+                        <span className="mb-2 ml-2 inline-flex rounded-md border border-primary/10 bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                          Mingguan #{slot.recurrence_index + 1}
+                        </span>
+                      )}
                       <h3 className="text-lg font-extrabold text-foreground">{slot.subject_name}</h3>
                       <p className="mt-1 text-sm font-medium text-muted-foreground">{slot.location}</p>
                     </div>
@@ -453,11 +474,10 @@ export function TutorDashboard() {
   );
 }
 
-function buildSlotOccurrences(date: string, startTime: string, endTime: string, repeatWeekly: boolean) {
+function buildSlotOccurrences(date: string, startTime: string, endTime: string, repeatMode: 'once' | 'weekly', repeatWeeks: number) {
   const occurrences: Array<{ startsAt: string; endsAt: string }> = [];
   const initialStart = new Date(`${date}T${startTime}`);
   const initialEnd = new Date(`${date}T${endTime}`);
-  const targetMonth = initialStart.getMonth();
 
   if (initialEnd <= initialStart) {
     throw new Error('Jam selesai harus setelah jam mulai.');
@@ -465,16 +485,13 @@ function buildSlotOccurrences(date: string, startTime: string, endTime: string, 
 
   let cursorStart = initialStart;
   let cursorEnd = initialEnd;
+  const occurrenceCount = repeatMode === 'weekly' ? Math.min(Math.max(repeatWeeks, 1), 12) : 1;
 
-  while (cursorStart.getMonth() === targetMonth) {
+  for (let index = 0; index < occurrenceCount; index += 1) {
     occurrences.push({
       startsAt: cursorStart.toISOString(),
       endsAt: cursorEnd.toISOString(),
     });
-
-    if (!repeatWeekly) {
-      break;
-    }
 
     cursorStart = new Date(cursorStart);
     cursorEnd = new Date(cursorEnd);
@@ -483,6 +500,10 @@ function buildSlotOccurrences(date: string, startTime: string, endTime: string, 
   }
 
   return occurrences;
+}
+
+function createClientId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function TutorTextInput({

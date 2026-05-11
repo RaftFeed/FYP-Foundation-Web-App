@@ -2,7 +2,6 @@ import { supabase } from './supabase';
 
 export type UserRole = 'student' | 'tutor' | 'admin';
 export type TutorStatus = 'pending' | 'approved' | 'rejected';
-export type SessionStatus = 'scheduled' | 'cancelled' | 'completed';
 export type BookingStatus = 'pending_payment' | 'upcoming' | 'completed' | 'cancelled';
 
 export interface Profile {
@@ -21,6 +20,10 @@ export interface Subject {
   created_at: string;
 }
 
+export interface SubjectMatchmakingSummary extends Subject {
+  matchmaking_count: number;
+}
+
 export interface TutorProfile {
   id: string;
   user_id: string | null;
@@ -36,25 +39,14 @@ export interface TutorProfile {
   subject?: Pick<Subject, 'id' | 'name' | 'code'> | null;
 }
 
-export interface CourseSession {
+export interface PublicTutorCard {
   id: string;
-  code: string;
-  title: string;
-  starts_at: string;
-  ends_at: string;
-  price_per_seat: number;
-  capacity: number;
-  location: string | null;
-  status: SessionStatus;
-  subject_id: string;
-  tutor_profile_id: string;
-  subject_name: string;
-  subject_code: string | null;
-  tutor_name: string;
-  tutor_image_url: string | null;
-  tutor_rating: number;
-  tutor_reviews_count: number;
-  booked_seats: number;
+  name: string;
+  subject: string;
+  rating: number;
+  reviews: number;
+  hourlyRate: number;
+  imageUrl: string | null;
 }
 
 export interface Booking {
@@ -72,7 +64,7 @@ export interface Booking {
     ends_at: string;
     price_per_seat: number;
     capacity: number;
-    status: SessionStatus;
+    status: string;
     subject?: Pick<Subject, 'name' | 'code'> | null;
     tutor?: Pick<TutorProfile, 'full_name'> | null;
   } | null;
@@ -117,227 +109,44 @@ export function bookingStatusLabel(status: BookingStatus) {
   return labels[status];
 }
 
-export function sessionStatusLabel(status: SessionStatus) {
-  const labels: Record<SessionStatus, string> = {
-    scheduled: 'Terjadwal',
-    completed: 'Selesai',
-    cancelled: 'Dibatalkan',
-  };
-
-  return labels[status];
-}
-
 function throwIfError(error: { message: string } | null) {
   if (error) {
     throw new Error(error.message);
   }
 }
 
-export async function fetchCourseSessions() {
-  const { data, error } = await supabase
-    .from('course_session_overview')
-    .select('*')
-    .eq('status', 'scheduled')
-    .order('starts_at', { ascending: true });
-
-  if (error) {
-    return fetchCourseSessionsFallback();
-  }
-
-  return (data ?? []) as CourseSession[];
-}
-
-async function fetchCourseSessionsFallback() {
-  const { data, error } = await supabase
-    .from('course_sessions')
-    .select(`
-      id,
-      code,
-      title,
-      starts_at,
-      ends_at,
-      price_per_seat,
-      capacity,
-      location,
-      status,
-      subject_id,
-      tutor_profile_id,
-      subject:subjects (name, code),
-      tutor:tutor_profiles!inner (full_name, image_url, rating, reviews_count, status)
-    `)
-    .eq('status', 'scheduled')
-    .eq('tutor.status', 'approved')
-    .order('starts_at', { ascending: true });
-
-  throwIfError(error);
-
-  return (data ?? []).map((session) => {
-    const row = session as unknown as {
-      id: string;
-      code: string;
-      title: string;
-      starts_at: string;
-      ends_at: string;
-      price_per_seat: number;
-      capacity: number;
-      location: string | null;
-      status: SessionStatus;
-      subject_id: string;
-      tutor_profile_id: string;
-      subject: { name: string; code: string | null } | null;
-      tutor: { full_name: string; image_url: string | null; rating: number; reviews_count: number; status: TutorStatus } | null;
-    };
-
-    return {
-      ...row,
-      subject_name: row.subject?.name ?? row.title,
-      subject_code: row.subject?.code ?? null,
-      tutor_name: row.tutor?.full_name ?? '-',
-      tutor_image_url: row.tutor?.image_url ?? null,
-      tutor_rating: row.tutor?.rating ?? 0,
-      tutor_reviews_count: row.tutor?.reviews_count ?? 0,
-      booked_seats: 0,
-    } satisfies CourseSession;
-  });
-}
-
-export async function fetchAdminCourseSessions() {
-  const { data, error } = await supabase
-    .from('course_sessions')
-    .select(`
-      id,
-      code,
-      title,
-      starts_at,
-      ends_at,
-      price_per_seat,
-      capacity,
-      location,
-      status,
-      subject_id,
-      tutor_profile_id,
-      subject:subjects (name, code),
-      tutor:tutor_profiles (full_name, image_url, rating, reviews_count)
-    `)
-    .order('starts_at', { ascending: true });
-
-  throwIfError(error);
-
-  return (data ?? []).map((session) => {
-    const row = session as unknown as {
-      id: string;
-      code: string;
-      title: string;
-      starts_at: string;
-      ends_at: string;
-      price_per_seat: number;
-      capacity: number;
-      location: string | null;
-      status: SessionStatus;
-      subject_id: string;
-      tutor_profile_id: string;
-      subject: { name: string; code: string | null } | null;
-      tutor: { full_name: string; image_url: string | null; rating: number; reviews_count: number } | null;
-    };
-
-    return {
-      ...row,
-      subject_name: row.subject?.name ?? row.title,
-      subject_code: row.subject?.code ?? null,
-      tutor_name: row.tutor?.full_name ?? '-',
-      tutor_image_url: row.tutor?.image_url ?? null,
-      tutor_rating: row.tutor?.rating ?? 0,
-      tutor_reviews_count: row.tutor?.reviews_count ?? 0,
-      booked_seats: 0,
-    } satisfies CourseSession;
-  });
-}
-
-export async function bookCourseSession(sessionId: string) {
-  const { error } = await supabase.rpc('join_class', {
-    target_session_id: sessionId,
-  });
-
+function isMissingLeanMvpDependency(error: { code?: string; message?: string } | null) {
   if (!error) {
-    return;
+    return false;
   }
 
-  const { error: legacyError } = await supabase.rpc('book_course_session', {
-    target_session_id: sessionId,
-  });
-
-  if (!legacyError) {
-    return;
-  }
-
-  await joinClassWithoutRpc(sessionId);
-}
-
-async function joinClassWithoutRpc(sessionId: string) {
-  const { data: sessionData, error: sessionError } = await supabase
-    .from('course_sessions')
-    .select('id, price_per_seat, status')
-    .eq('id', sessionId)
-    .eq('status', 'scheduled')
-    .single();
-
-  throwIfError(sessionError);
-
-  if (!sessionData) {
-    throw new Error('Session is not available.');
-  }
-
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  throwIfError(authError);
-
-  if (!authData.user) {
-    throw new Error('You must be signed in to join a class.');
-  }
-
-  const { error } = await supabase
-    .from('bookings')
-    .insert({
-      session_id: sessionData.id,
-      student_id: authData.user.id,
-      status: 'pending_payment' satisfies BookingStatus,
-      total_price: sessionData.price_per_seat,
-    });
-
-  if (error?.code === '23505') {
-    throw new Error('You already joined this class.');
-  }
-
-  throwIfError(error);
+  return (
+    error.code === '42P01'
+    || error.code === 'PGRST200'
+    || error.code === 'PGRST205'
+    || error.message?.includes("Could not find a relationship between 'bookings' and 'course_sessions'") === true
+    || error.message?.includes('relation "public.course_sessions" does not exist') === true
+    || error.message?.includes('relation "public.bookings" does not exist') === true
+    || error.message?.includes('relation "public.course_session_overview" does not exist') === true
+  );
 }
 
 export async function fetchMyBookings(userId: string) {
   const { data, error } = await supabase
     .from('bookings')
-    .select(`
-      id,
-      session_id,
-      student_id,
-      status,
-      total_price,
-      created_at,
-      session:course_sessions (
-        id,
-        code,
-        title,
-        starts_at,
-        ends_at,
-        price_per_seat,
-        capacity,
-        status,
-        subject:subjects (name, code),
-        tutor:tutor_profiles (full_name)
-      )
-    `)
+    .select('id, session_id, student_id, status, total_price, created_at')
     .eq('student_id', userId)
     .order('created_at', { ascending: false });
 
+  if (isMissingLeanMvpDependency(error)) {
+    return [];
+  }
+
   throwIfError(error);
-  return (data ?? []) as unknown as Booking[];
+  return ((data ?? []) as Booking[]).map((booking) => ({
+    ...booking,
+    session: null,
+  }));
 }
 
 export async function cancelBooking(bookingId: string) {
@@ -359,6 +168,46 @@ export async function fetchSubjects() {
   return (data ?? []) as Subject[];
 }
 
+export async function fetchSubjectMatchmakingSummaries() {
+  const { data, error } = await supabase
+    .from('subject_matchmaking_overview')
+    .select('*')
+    .order('matchmaking_count', { ascending: false })
+    .order('name', { ascending: true });
+
+  if (!error) {
+    return (data ?? []) as SubjectMatchmakingSummary[];
+  }
+
+  const { data: fallbackData, error: fallbackError } = await supabase
+    .from('subjects')
+    .select(`
+      id,
+      name,
+      code,
+      description,
+      created_at,
+      matchmaking_lobbies!left (
+        id,
+        status
+      )
+    `)
+    .order('name', { ascending: true });
+
+  throwIfError(fallbackError);
+
+  return ((fallbackData ?? []) as Array<Subject & { matchmaking_lobbies?: Array<{ id: string; status: string }> | null }>).map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    code: subject.code,
+    description: subject.description,
+    created_at: subject.created_at,
+    matchmaking_count: (subject.matchmaking_lobbies ?? []).filter((lobby) =>
+      ['open', 'pending_payment', 'paid'].includes(lobby.status),
+    ).length,
+  }));
+}
+
 export async function fetchTutorProfiles() {
   const { data, error } = await supabase
     .from('tutor_profiles')
@@ -367,6 +216,47 @@ export async function fetchTutorProfiles() {
 
   throwIfError(error);
   return (data ?? []) as TutorProfile[];
+}
+
+export async function fetchApprovedTutorCards(limit = 6) {
+  const { data, error } = await supabase
+    .from('tutor_profiles')
+    .select(`
+      id,
+      full_name,
+      hourly_rate,
+      rating,
+      reviews_count,
+      image_url,
+      subject:subjects (name)
+    `)
+    .eq('status', 'approved')
+    .order('rating', { ascending: false })
+    .limit(limit);
+
+  throwIfError(error);
+
+  return (data ?? []).map((tutor) => {
+    const row = tutor as unknown as {
+      id: string;
+      full_name: string;
+      hourly_rate: number;
+      rating: number;
+      reviews_count: number;
+      image_url: string | null;
+      subject: { name: string } | null;
+    };
+
+    return {
+      id: row.id,
+      name: row.full_name,
+      subject: row.subject?.name ?? 'Tutor PPKU',
+      rating: Number(row.rating ?? 0),
+      reviews: Number(row.reviews_count ?? 0),
+      hourlyRate: Number(row.hourly_rate ?? 0),
+      imageUrl: row.image_url,
+    } satisfies PublicTutorCard;
+  });
 }
 
 export async function fetchAdminBookings() {
@@ -379,24 +269,15 @@ export async function fetchAdminBookings() {
       status,
       total_price,
       created_at,
-      student:profiles!bookings_student_id_fkey (email, full_name),
-      session:course_sessions (
-        id,
-        code,
-        title,
-        starts_at,
-        ends_at,
-        price_per_seat,
-        capacity,
-        status,
-        subject:subjects (name, code),
-        tutor:tutor_profiles (full_name)
-      )
+      student:profiles!bookings_student_id_fkey (email, full_name)
     `)
     .order('created_at', { ascending: false });
 
   throwIfError(error);
-  return (data ?? []) as unknown as Booking[];
+  return ((data ?? []) as Booking[]).map((booking) => ({
+    ...booking,
+    session: null,
+  }));
 }
 
 export async function fetchProfiles() {
@@ -472,45 +353,6 @@ export async function upsertTutorProfile(input: {
 
 export async function deleteTutorProfile(id: string) {
   const { error } = await supabase.from('tutor_profiles').delete().eq('id', id);
-  throwIfError(error);
-}
-
-export async function upsertCourseSession(input: {
-  id?: string;
-  tutor_profile_id: string;
-  subject_id: string;
-  code: string;
-  title: string;
-  starts_at: string;
-  ends_at: string;
-  price_per_seat: number;
-  capacity: number;
-  location: string | null;
-  status: SessionStatus;
-}) {
-  const payload = {
-    tutor_profile_id: input.tutor_profile_id,
-    subject_id: input.subject_id,
-    code: input.code.trim(),
-    title: input.title.trim(),
-    starts_at: input.starts_at,
-    ends_at: input.ends_at,
-    price_per_seat: input.price_per_seat,
-    capacity: input.capacity,
-    location: input.location || null,
-    status: input.status,
-  };
-
-  const query = input.id
-    ? supabase.from('course_sessions').update(payload).eq('id', input.id)
-    : supabase.from('course_sessions').insert(payload);
-
-  const { error } = await query;
-  throwIfError(error);
-}
-
-export async function deleteCourseSession(id: string) {
-  const { error } = await supabase.from('course_sessions').delete().eq('id', id);
   throwIfError(error);
 }
 

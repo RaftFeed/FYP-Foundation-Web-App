@@ -13,57 +13,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { AuthPage } from './components/AuthPage';
 import { StudentDashboard } from './components/StudentDashboard';
 import { TutorDashboard } from './components/TutorDashboard';
-
-const tutors = [
-  {
-    name: 'Dr. Budi Santoso',
-    subject: 'Fisika Dasar',
-    rating: 4.9,
-    reviews: 127,
-    hourlyRate: 75000,
-    imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-  },
-  {
-    name: 'Siti Nurhaliza',
-    subject: 'Kalkulus',
-    rating: 5.0,
-    reviews: 89,
-    hourlyRate: 85000,
-    imageUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face',
-  },
-  {
-    name: 'Ahmad Fauzi',
-    subject: 'Kimia Dasar',
-    rating: 4.8,
-    reviews: 156,
-    hourlyRate: 70000,
-    imageUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face',
-  },
-  {
-    name: 'Rani Wijaya',
-    subject: 'Pemrograman',
-    rating: 4.9,
-    reviews: 94,
-    hourlyRate: 90000,
-    imageUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
-  },
-  {
-    name: 'Dimas Pratama',
-    subject: 'Matematika Diskrit',
-    rating: 5.0,
-    reviews: 112,
-    hourlyRate: 80000,
-    imageUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop&crop=face',
-  },
-  {
-    name: 'Lestari Putri',
-    subject: 'Biologi Umum',
-    rating: 4.7,
-    reviews: 78,
-    hourlyRate: 65000,
-    imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=face',
-  },
-];
+import { fetchApprovedTutorCards, type PublicTutorCard } from '../lib/dashboardData';
 
 const themeTokens: Record<string, Record<string, string>> = {
   default: {
@@ -101,6 +51,8 @@ export default function App() {
 function AppContent() {
   const { session, role, isAuthLoading } = useAuth();
   const [route, setRoute] = useState(getCurrentRoute);
+  const [tutors, setTutors] = useState<PublicTutorCard[]>([]);
+  const [isLoadingTutors, setIsLoadingTutors] = useState(false);
 
   useEffect(() => {
     function handleRouteChange() {
@@ -110,6 +62,36 @@ function AppContent() {
     window.addEventListener('popstate', handleRouteChange);
     return () => window.removeEventListener('popstate', handleRouteChange);
   }, []);
+
+  useEffect(() => {
+    if (session) {
+      return;
+    }
+
+    let active = true;
+    setIsLoadingTutors(true);
+
+    fetchApprovedTutorCards()
+      .then((nextTutors) => {
+        if (active) {
+          setTutors(nextTutors);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setTutors([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingTutors(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   if (isAuthLoading) {
     return (
@@ -167,8 +149,18 @@ function AppContent() {
           <div className="flex gap-8 items-start">
             <div className="flex-1">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-5">
-                {tutors.map((tutor, index) => (
-                  <TutorCard key={index} {...tutor} />
+                {isLoadingTutors && (
+                  <div className="col-span-full rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
+                    Memuat tutor dari database...
+                  </div>
+                )}
+                {!isLoadingTutors && tutors.length === 0 && (
+                  <div className="col-span-full rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
+                    Belum ada tutor approved di database.
+                  </div>
+                )}
+                {tutors.map((tutor) => (
+                  <TutorCard key={tutor.id} {...tutor} />
                 ))}
               </div>
 

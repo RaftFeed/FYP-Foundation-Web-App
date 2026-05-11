@@ -3,11 +3,14 @@ import {
   Bell,
   BookOpen,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   CircleCheck,
   Clock3,
   Home,
   LogOut,
+  MapPin,
   NotebookTabs,
   Search,
   Settings,
@@ -21,19 +24,19 @@ import { MatchmakingLobbyView } from './MatchmakingLobbyView';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import {
   Booking,
-  CourseSession,
-  bookCourseSession,
   bookingStatusLabel,
   cancelBooking,
   fetchProfileById,
-  fetchCourseSessions,
   fetchMyBookings,
+  fetchSubjectMatchmakingSummaries,
   formatCurrency,
   formatDate,
   formatTimeRange,
+  SubjectMatchmakingSummary,
   updateProfileName,
   type Profile,
 } from '../../lib/dashboardData';
+import { MatchmakingLobby, TutorAvailabilitySlot, fetchAvailableTutorSlots, fetchMatchmakingLobbies, fetchStudentTutorScheduleSlots } from '../../lib/matchmakingData';
 
 type StudentView = 'dashboard' | 'courses' | 'lobbies' | 'bookings' | 'schedule' | 'profile' | 'settings';
 
@@ -69,8 +72,11 @@ export function StudentDashboard() {
   const [activeView, setActiveView] = usePersistentState<StudentView>(stateKeyPrefix ? `${stateKeyPrefix}:active-view` : null, 'dashboard');
   const [query, setQuery] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:course-query` : null, '');
   const [nameInput, setNameInput] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:name-input` : null, '');
-  const [sessions, setSessions] = useState<CourseSession[]>([]);
+  const [availableTutorSlots, setAvailableTutorSlots] = useState<TutorAvailabilitySlot[]>([]);
+  const [scheduleTutorSlots, setScheduleTutorSlots] = useState<TutorAvailabilitySlot[]>([]);
+  const [subjects, setSubjects] = useState<SubjectMatchmakingSummary[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [joinedLobbies, setJoinedLobbies] = useState<MatchmakingLobby[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
@@ -84,14 +90,20 @@ export function StudentDashboard() {
 
     const cacheKey = `student-dashboard:${user.id}:data`;
     const cachedData = readLocalCache<{
-      sessions: CourseSession[];
+      availableTutorSlots: TutorAvailabilitySlot[];
+      scheduleTutorSlots: TutorAvailabilitySlot[];
+      subjects: SubjectMatchmakingSummary[];
       bookings: Booking[];
+      joinedLobbies: MatchmakingLobby[];
       profile: Profile | null;
     }>(cacheKey);
 
     if (cachedData) {
-      setSessions(cachedData.sessions);
+      setAvailableTutorSlots(cachedData.availableTutorSlots);
+      setScheduleTutorSlots(cachedData.scheduleTutorSlots);
+      setSubjects(cachedData.subjects);
       setBookings(cachedData.bookings);
+      setJoinedLobbies(cachedData.joinedLobbies);
       setProfile(cachedData.profile);
       setIsLoading(false);
     } else {
@@ -99,17 +111,27 @@ export function StudentDashboard() {
     }
 
     try {
-      const [nextSessions, nextBookings, nextProfile] = await Promise.all([
-        fetchCourseSessions(),
+      const [nextAvailableTutorSlots, nextScheduleTutorSlots, nextSubjects, nextBookings, nextLobbies, nextProfile] = await Promise.all([
+        fetchAvailableTutorSlots(),
+        fetchStudentTutorScheduleSlots(),
+        fetchSubjectMatchmakingSummaries(),
         fetchMyBookings(user.id),
+        fetchMatchmakingLobbies(),
         fetchProfileById(user.id),
       ]);
-      setSessions(nextSessions);
+      const nextJoinedLobbies = nextLobbies.filter((lobby) => lobby.current_user_is_member);
+      setAvailableTutorSlots(nextAvailableTutorSlots);
+      setScheduleTutorSlots(nextScheduleTutorSlots);
+      setSubjects(nextSubjects);
       setBookings(nextBookings);
+      setJoinedLobbies(nextJoinedLobbies);
       setProfile(nextProfile);
       writeLocalCache(cacheKey, {
-        sessions: nextSessions,
+        availableTutorSlots: nextAvailableTutorSlots,
+        scheduleTutorSlots: nextScheduleTutorSlots,
+        subjects: nextSubjects,
         bookings: nextBookings,
+        joinedLobbies: nextJoinedLobbies,
         profile: nextProfile,
       });
     } catch (error) {
@@ -128,18 +150,6 @@ export function StudentDashboard() {
       setNameInput(profile.full_name);
     }
   }, [nameInput, profile?.full_name, setNameInput]);
-
-  const handleBook = async (sessionId: string) => {
-    setNotice(null);
-    try {
-      await bookCourseSession(sessionId);
-      setNotice('Booking berhasil dibuat. Status awal: Menunggu Pembayaran.');
-      await loadDashboard();
-      setActiveView('bookings');
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal membuat booking.');
-    }
-  };
 
   const handleCancel = async (bookingId: string) => {
     setNotice(null);
@@ -252,10 +262,10 @@ export function StudentDashboard() {
             </div>
           )}
 
-          {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} sessions={sessions} setQuery={setQuery} onBook={handleBook} />}
-          {activeView === 'lobbies' && <MatchmakingLobbyView />}
-          {activeView === 'bookings' && <BookingsView bookings={bookings} onCancel={handleCancel} stateKeyPrefix={stateKeyPrefix} />}
-          {activeView === 'schedule' && <TutorScheduleView sessions={sessions} />}
+          {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} />}
+          {activeView === 'lobbies' && <MatchmakingLobbyView onLobbyChange={() => void loadDashboard()} />}
+          {activeView === 'bookings' && <BookingsView bookings={bookings} joinedLobbies={joinedLobbies} onCancel={handleCancel} stateKeyPrefix={stateKeyPrefix} />}
+          {activeView === 'schedule' && <TutorScheduleView slots={scheduleTutorSlots} />}
           {activeView === 'settings' && <SettingsView />}
           {activeView === 'profile' && (
             <ProfileView
@@ -268,7 +278,9 @@ export function StudentDashboard() {
               onNameSave={handleNameSave}
             />
           )}
-          {activeView === 'dashboard' && <DashboardView bookings={bookings} displayName={displayName} sessions={sessions} setActiveView={setActiveView} />}
+          {activeView === 'dashboard' && (
+            <DashboardView bookings={bookings} displayName={displayName} availableTutorSlots={availableTutorSlots} setActiveView={setActiveView} />
+          )}
         </main>
       </div>
     </div>
@@ -278,12 +290,12 @@ export function StudentDashboard() {
 function DashboardView({
   bookings,
   displayName,
-  sessions,
+  availableTutorSlots,
   setActiveView,
 }: {
   bookings: Booking[];
   displayName: string;
-  sessions: CourseSession[];
+  availableTutorSlots: TutorAvailabilitySlot[];
   setActiveView: (view: StudentView) => void;
 }) {
   const activeBookings = bookings.filter((booking) => booking.status === 'upcoming' || booking.status === 'pending_payment');
@@ -340,7 +352,7 @@ function DashboardView({
             upcoming.map((booking) => <BookingRow key={booking.id} booking={booking} />)
           ) : (
             <div className="p-6 text-sm font-medium text-muted-foreground">
-              Belum ada kelas mendatang. Ada {sessions.length} kelas tersedia untuk kamu.
+              Belum ada booking mendatang. Ada {availableTutorSlots.length} slot tutor tersedia untuk kamu.
             </div>
           )}
         </div>
@@ -352,26 +364,24 @@ function DashboardView({
 function CoursesView({
   isLoading,
   query,
-  sessions,
+  subjects,
   setQuery,
-  onBook,
 }: {
   isLoading: boolean;
   query: string;
-  sessions: CourseSession[];
+  subjects: SubjectMatchmakingSummary[];
   setQuery: (query: string) => void;
-  onBook: (sessionId: string) => void;
 }) {
-  const filteredSessions = useMemo(() => {
+  const filteredSubjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) {
-      return sessions;
+      return subjects;
     }
 
-    return sessions.filter((session) =>
-      [session.subject_name, session.tutor_name, session.code, session.title].some((value) => value.toLowerCase().includes(normalized)),
+    return subjects.filter((subject) =>
+      [subject.name, subject.code ?? '', subject.description ?? ''].some((value) => value.toLowerCase().includes(normalized)),
     );
-  }, [query, sessions]);
+  }, [query, subjects]);
 
   return (
     <section className="mx-auto max-w-6xl">
@@ -380,69 +390,74 @@ function CoursesView({
           <p className="mb-4 text-2xl font-semibold uppercase tracking-[0.22em] text-primary lg:text-3xl">Mata Kuliah</p>
           <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground">Pilih Mata Kuliah</h1>
           <p className="max-w-3xl text-sm font-medium leading-relaxed text-muted-foreground">
-            Berikut adalah kelas grup yang tersedia langsung dari database Supabase.
+            Setiap kartu menampilkan jumlah lobby matchmaking aktif untuk mata kuliah tersebut.
           </p>
         </div>
       </div>
 
       <label className="relative mb-6 block">
-        <span className="sr-only">Cari kelas</span>
+        <span className="sr-only">Cari mata kuliah</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Cari kelas, tutor, atau kode kelas"
+          placeholder="Cari mata kuliah atau kode"
           className="h-10 w-full rounded-lg border border-primary/20 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       </label>
 
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-extrabold tracking-normal text-foreground">Kelas Tersedia</h2>
-        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSessions.length} data</p>
+        <h2 className="text-xl font-extrabold tracking-normal text-foreground">Daftar Mata Kuliah</h2>
+        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} data</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
-        {isLoading && <div className="p-6 text-sm font-medium text-muted-foreground">Memuat kelas...</div>}
-        {!isLoading && filteredSessions.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Tidak ada kelas yang cocok.</div>}
-        {filteredSessions.map((session) => {
-          const isFull = session.booked_seats >= session.capacity;
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {isLoading && (
+          <div className="col-span-full rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground shadow-md">
+            Memuat mata kuliah...
+          </div>
+        )}
+        {!isLoading && filteredSubjects.length === 0 && (
+          <div className="col-span-full rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground shadow-md">
+            Tidak ada mata kuliah yang cocok.
+          </div>
+        )}
+        {filteredSubjects.map((subject) => {
+          const hasMatchmaking = subject.matchmaking_count > 0;
 
           return (
-            <article
-              key={session.id}
-              className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 xl:grid-cols-[104px_1.25fr_1fr_0.95fr_auto] xl:items-center"
-            >
-              <div className="relative h-24 w-24 rounded-xl border border-primary/10 bg-secondary">
-                <span className="absolute left-2 top-2 rounded-md border border-primary/20 bg-white px-2 py-0.5 text-xs font-semibold text-primary">
-                  {session.booked_seats}/{session.capacity}
+            <article key={subject.id} className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mata Kuliah</p>
+                  <h3 className="text-lg font-extrabold text-foreground">{subject.name}</h3>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    hasMatchmaking ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
+                  }`}
+                >
+                  {subject.matchmaking_count} Matchmaking
                 </span>
               </div>
-              <div>
-                <h3 className="mb-1 text-lg font-extrabold text-foreground">Matkul - {session.subject_name}</h3>
-                <p className="mb-4 text-sm font-medium text-muted-foreground">Tutor : {session.tutor_name}</p>
-                <div className="space-y-2 text-sm font-medium text-foreground xl:hidden">
-                  <CourseSchedule startsAt={session.starts_at} endsAt={session.ends_at} />
-                </div>
+
+              <div className="mb-4 flex items-center gap-2">
+                <span className="rounded-md border border-primary/20 bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">
+                  {subject.code ?? 'Tanpa kode'}
+                </span>
               </div>
-              <div className="hidden space-y-2 text-sm font-medium text-foreground xl:block">
-                <CourseSchedule startsAt={session.starts_at} endsAt={session.ends_at} />
-              </div>
-              <div>
-                <p className="mb-4 text-base font-extrabold text-primary">{formatCurrency(session.price_per_seat)} / sesi</p>
-                <p className="mb-1 text-sm font-medium text-muted-foreground">Kode Kelas</p>
-                <p className="inline-flex rounded-md border-2 border-dashed border-primary/30 bg-secondary px-3 py-1.5 text-sm font-semibold tracking-[0.18em] text-primary">
-                  {session.code}
+
+              <p className="min-h-[72px] text-sm font-medium leading-relaxed text-muted-foreground">
+                {subject.description?.trim() || 'Deskripsi mata kuliah belum tersedia.'}
+              </p>
+
+              <div className="mt-5 rounded-lg border border-primary/10 bg-secondary/60 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status Lobby</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">
+                  {hasMatchmaking ? `Ada ${subject.matchmaking_count} lobby aktif untuk matkul ini.` : 'Belum ada lobby aktif untuk matkul ini.'}
                 </p>
               </div>
-              <button
-                type="button"
-                disabled={isFull}
-                onClick={() => onBook(session.id)}
-                className="h-10 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-              >
-                {isFull ? 'Kelas Penuh' : 'Gabung'}
-              </button>
             </article>
           );
         })}
@@ -453,10 +468,12 @@ function CoursesView({
 
 function BookingsView({
   bookings,
+  joinedLobbies,
   onCancel,
   stateKeyPrefix,
 }: {
   bookings: Booking[];
+  joinedLobbies: MatchmakingLobby[];
   onCancel: (bookingId: string) => void;
   stateKeyPrefix: string | null;
 }) {
@@ -488,6 +505,20 @@ function BookingsView({
         ))}
       </div>
 
+      <div className="mb-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-xl font-extrabold tracking-normal text-foreground">Lobby Grup Saya</h2>
+          <p className="text-sm font-medium text-muted-foreground">{joinedLobbies.length} lobby diikuti</p>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
+          {joinedLobbies.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Kamu belum bergabung ke lobby grup mana pun.</div>}
+          {joinedLobbies.map((lobby) => (
+            <JoinedLobbyRow key={lobby.id} lobby={lobby} />
+          ))}
+        </div>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
         {visibleBookings.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada booking pada kategori ini.</div>}
         {visibleBookings.map((booking) => (
@@ -498,15 +529,48 @@ function BookingsView({
   );
 }
 
+function JoinedLobbyRow({ lobby }: { lobby: MatchmakingLobby }) {
+  const memberCount = lobby.member_count ?? 0;
+
+  return (
+    <article className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[92px_1fr_220px] lg:items-center">
+      <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-primary/10 bg-secondary text-primary">
+        <Users className="h-8 w-8" />
+      </div>
+      <div>
+        <h3 className="mb-1 text-base font-extrabold text-foreground">{lobby.title}</h3>
+        <p className="mb-2 text-sm font-medium text-muted-foreground">
+          {lobby.subject_name} bersama {lobby.tutor_name}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+          <span className="rounded-full bg-secondary px-3 py-1 text-primary">{lobby.status}</span>
+          <span>{formatDate(lobby.starts_at)}</span>
+          <span>{formatTimeRange(lobby.starts_at, lobby.ends_at)}</span>
+          <span>{memberCount}/{lobby.max_participants} siswa</span>
+        </div>
+      </div>
+      <div className="text-sm font-medium text-muted-foreground lg:text-right">
+        <p className="font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
+        <p className="mt-1">Kode {lobby.code}</p>
+        <p className="mt-1">{lobby.location}</p>
+      </div>
+    </article>
+  );
+}
+
 function BookingRow({ booking, onCancel }: { booking: Booking; onCancel?: (bookingId: string) => void }) {
   const session = booking.session;
+  const bookingLabel = session?.subject?.name ?? session?.title ?? `Booking ${booking.id.slice(0, 8)}`;
+  const createdAtLabel = formatDate(booking.created_at);
 
   return (
     <article className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[92px_1fr_220px] lg:items-center">
       <div className="h-20 w-20 rounded-xl border border-primary/10 bg-secondary" />
       <div>
-        <h3 className="mb-1 text-base font-extrabold text-foreground">Matkul - {session?.subject?.name ?? session?.title ?? 'Kelas'}</h3>
-        <p className="mb-4 text-sm font-medium text-muted-foreground">Tutor : {session?.tutor?.full_name ?? '-'}</p>
+        <h3 className="mb-1 text-base font-extrabold text-foreground">{bookingLabel}</h3>
+        <p className="mb-4 text-sm font-medium text-muted-foreground">
+          {session?.tutor?.full_name ? `Tutor : ${session.tutor.full_name}` : `Session ID : ${booking.session_id}`}
+        </p>
         {session && (
           <div className="flex flex-col gap-2 text-sm font-medium text-foreground sm:flex-row sm:gap-5">
             <p className="flex items-center gap-2">
@@ -516,6 +580,14 @@ function BookingRow({ booking, onCancel }: { booking: Booking; onCancel?: (booki
             <p className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-primary" />
               {formatTimeRange(session.starts_at, session.ends_at)}
+            </p>
+          </div>
+        )}
+        {!session && (
+          <div className="flex flex-col gap-2 text-sm font-medium text-foreground sm:flex-row sm:gap-5">
+            <p className="flex items-center gap-2">
+              <NotebookTabs className="h-4 w-4 text-primary" />
+              {createdAtLabel}
             </p>
           </div>
         )}
@@ -541,35 +613,274 @@ function BookingRow({ booking, onCancel }: { booking: Booking; onCancel?: (booki
   );
 }
 
-function TutorScheduleView({ sessions }: { sessions: CourseSession[] }) {
-  const upcoming = sessions.slice(0, 10);
+function TutorScheduleView({ slots }: { slots: TutorAvailabilitySlot[] }) {
+  const today = useMemo(() => new Date(), []);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const seedDate = slots[0]?.starts_at ? new Date(slots[0].starts_at) : today;
+    return new Date(seedDate.getFullYear(), seedDate.getMonth(), 1);
+  });
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedTutor, setSelectedTutor] = useState('all');
+  const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
+
+  const subjectOptions = useMemo(
+    () => ['all', ...Array.from(new Set(slots.map((slot) => slot.subject_name))).sort((a, b) => a.localeCompare(b, 'id-ID'))],
+    [slots],
+  );
+  const tutorOptions = useMemo(
+    () => ['all', ...Array.from(new Set(slots.map((slot) => slot.tutor_name))).sort((a, b) => a.localeCompare(b, 'id-ID'))],
+    [slots],
+  );
+
+  const filteredSlots = useMemo(() => {
+    return slots.filter((slot) => {
+      if (selectedSubject !== 'all' && slot.subject_name !== selectedSubject) {
+        return false;
+      }
+
+      if (selectedTutor !== 'all' && slot.tutor_name !== selectedTutor) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [selectedSubject, selectedTutor, slots]);
+
+  const monthSessions = useMemo(
+    () =>
+      filteredSlots.filter((slot) => {
+        const startsAt = new Date(slot.starts_at);
+        return startsAt.getFullYear() === currentMonth.getFullYear() && startsAt.getMonth() === currentMonth.getMonth();
+      }),
+    [currentMonth, filteredSlots],
+  );
+
+  const groupedByDay = useMemo(() => {
+    const groups = new Map<string, TutorAvailabilitySlot[]>();
+    for (const slot of monthSessions) {
+      const key = getDateKey(new Date(slot.starts_at));
+      const existing = groups.get(key) ?? [];
+      existing.push(slot);
+      groups.set(key, existing);
+    }
+
+    for (const entries of groups.values()) {
+      entries.sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime());
+    }
+
+    return groups;
+  }, [monthSessions]);
+
+  const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
 
   return (
     <section className="mx-auto max-w-6xl">
       <div className="mb-6">
         <p className="mb-4 text-2xl font-semibold uppercase tracking-[0.22em] text-primary lg:text-3xl">Jadwal Tutor</p>
         <p className="max-w-4xl text-sm font-medium leading-relaxed text-muted-foreground">
-          Jadwal berikut berasal dari tabel course_sessions dan akan berubah saat admin mengubah sesi.
+          Lihat ketersediaan tutor berdasarkan tanggal. Data diambil langsung dari jadwal tutor yang tersedia.
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
-        {upcoming.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada jadwal tutor.</div>}
-        {upcoming.map((session) => (
-          <article key={session.id} className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 md:grid-cols-[1fr_1fr_160px] md:items-center">
-            <div>
-              <p className="text-base font-extrabold text-foreground">{session.tutor_name}</p>
-              <p className="mt-1 text-sm font-medium text-muted-foreground">{session.subject_name}</p>
-            </div>
-            <div className="space-y-2 text-sm font-medium text-foreground">
-              <CourseSchedule startsAt={session.starts_at} endsAt={session.ends_at} />
-            </div>
-            <p className="rounded-lg bg-secondary px-3 py-2 text-center text-sm font-semibold text-primary">{session.booked_seats}/{session.capacity} kursi</p>
-          </article>
-        ))}
+      <div className="rounded-2xl border border-primary/10 bg-white p-4 shadow-md lg:p-5">
+        <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary"
+              aria-label="Bulan sebelumnya"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary"
+              aria-label="Bulan berikutnya"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
+              className="rounded-lg border border-primary/15 px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-secondary"
+            >
+              {new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(currentMonth)}
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:w-[420px]">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mata Kuliah</span>
+              <select
+                value={selectedSubject}
+                onChange={(event) => setSelectedSubject(event.target.value)}
+                className="h-10 w-full rounded-lg border border-primary/15 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+              >
+                <option value="all">Semua Matkul</option>
+                {subjectOptions.slice(1).map((subject) => (
+                  <option key={subject} value={subject}>
+                    {subject}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Tutor</span>
+              <select
+                value={selectedTutor}
+                onChange={(event) => setSelectedTutor(event.target.value)}
+                className="h-10 w-full rounded-lg border border-primary/15 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+              >
+                <option value="all">Semua Tutor</option>
+                {tutorOptions.slice(1).map((tutor) => (
+                  <option key={tutor} value={tutor}>
+                    {tutor}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {slots.length === 0 && (
+          <div className="mb-5 rounded-xl border border-primary/10 bg-secondary/30 px-4 py-3 text-sm font-medium text-muted-foreground">
+            Belum ada jadwal tutor yang tersedia untuk ditampilkan.
+          </div>
+        )}
+
+        <div className="overflow-hidden rounded-2xl border border-primary/10">
+          <div className="grid grid-cols-7 border-b border-primary/10 bg-secondary/60">
+            {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((day) => (
+              <div key={day} className="px-3 py-3 text-center text-sm font-bold text-foreground">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7">
+            {calendarDays.map((day) => {
+              const daySessions = groupedByDay.get(day.key) ?? [];
+              const isToday = day.key === getDateKey(today);
+              const isHovered = hoveredDateKey === day.key;
+
+              return (
+                <div
+                  key={day.key}
+                  className={`relative min-h-[108px] border-b border-r border-primary/10 p-3 text-left align-top transition sm:min-h-[118px] ${
+                    day.isCurrentMonth ? 'bg-white hover:bg-secondary/40' : 'bg-secondary/30 text-muted-foreground/70'
+                  } ${isHovered ? 'z-20 bg-primary/[0.05]' : ''}`}
+                  onMouseEnter={() => setHoveredDateKey(daySessions.length > 0 ? day.key : null)}
+                  onMouseLeave={() => setHoveredDateKey((current) => (current === day.key ? null : current))}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <span
+                      className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-semibold ${
+                        isToday ? 'bg-primary text-white' : isHovered ? 'bg-primary/10 text-primary' : 'text-foreground'
+                      }`}
+                    >
+                      {day.date.getDate()}
+                    </span>
+                    {daySessions.length > 0 && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">{daySessions.length}</span>}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {daySessions.slice(0, 4).map((session) => (
+                      <span key={session.id} className="h-2.5 w-2.5 rounded-full bg-primary" aria-hidden="true" />
+                    ))}
+                    {daySessions.length > 4 && <span className="text-[11px] font-bold text-primary">+{daySessions.length - 4}</span>}
+                  </div>
+
+                  {isHovered && daySessions.length > 0 && (
+                    <div className="absolute left-1/2 top-[calc(100%-8px)] z-30 w-[280px] -translate-x-1/2 rounded-2xl border border-primary/15 bg-white p-4 text-left shadow-2xl">
+                      <div className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 border-l border-t border-primary/15 bg-white" />
+                      <div className="relative">
+                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Detail Jadwal</p>
+                        <h2 className="mt-2 text-base font-extrabold text-foreground">{formatCalendarHeading(day.key)}</h2>
+                        <div className="mt-4 space-y-3">
+                          {daySessions.map((session) => (
+                            <article key={session.id} className="rounded-xl border border-primary/10 bg-secondary/20 p-3">
+                              <div className="mb-2 flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-extrabold text-foreground">{session.tutor_name}</p>
+                                  <p className="mt-1 text-xs font-medium text-muted-foreground">{session.subject_name}</p>
+                                </div>
+                                <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+                                  {session.status}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1.5 text-xs font-medium text-foreground">
+                                <p className="flex items-center gap-2">
+                                  <Clock3 className="h-3.5 w-3.5 text-primary" />
+                                  {formatTimeRange(session.starts_at, session.ends_at)}
+                                </p>
+                                <p className="flex items-center gap-2">
+                                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                                  {session.location ?? 'Online'}
+                                </p>
+                                {session.notes && (
+                                  <p className="flex items-center gap-2">
+                                    <NotebookTabs className="h-3.5 w-3.5 text-primary" />
+                                    {session.notes}
+                                  </p>
+                                )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );
+}
+
+function getDateKey(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildCalendarDays(currentMonth: Date) {
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const mondayFirstOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(year, month, 1 - mondayFirstOffset);
+  const totalVisibleDays = mondayFirstOffset + lastDay.getDate();
+  const cellCount = Math.ceil(totalVisibleDays / 7) * 7;
+
+  return Array.from({ length: cellCount }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+
+    return {
+      key: getDateKey(date),
+      date,
+      isCurrentMonth: date.getMonth() === month,
+    };
+  });
+}
+
+function formatCalendarHeading(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(year, month - 1, day));
 }
 
 function ProfileView({

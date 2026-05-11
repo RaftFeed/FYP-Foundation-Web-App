@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Atom, Calculator, FlaskConical, Code2, Binary, Dna, X, AlertTriangle, Users, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Atom, Calculator, FlaskConical, Code2, Binary, Dna, X, AlertTriangle, Users, ArrowRight } from 'lucide-react';
 
 interface MatkulItem {
   id: string;
@@ -119,13 +119,13 @@ function CreateGroupModal({ matkul, onClose, onConfirm }: CreateGroupModalProps)
 
           <h3 className="text-center text-foreground mb-2" id="create-group-title">Belum Ada Kelas Aktif</h3>
           <p className="text-center text-muted-foreground mb-6 text-sm leading-relaxed">
-            Belum ada kelas grup aktif untuk mata kuliah ini. Apakah Anda ingin membuat grup baru dan mengundang teman sekelas?
+            Belum ada kelas grup aktif untuk mata kuliah ini. Masuk sebagai student untuk memilih slot tutor yang tersedia dan membuat grup baru.
           </p>
 
           <div className="bg-secondary rounded-xl p-4 mb-6 flex gap-3 border border-primary/10">
             <Users className="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <p className="text-sm text-primary/80">
-              Tutor akan tersedia setelah minimal <strong>3 anggota</strong> bergabung ke grup baru Anda.
+              Grup public atau private dibuat dari jadwal tutor yang sudah tersedia di database.
             </p>
           </div>
 
@@ -141,59 +141,9 @@ function CreateGroupModal({ matkul, onClose, onConfirm }: CreateGroupModalProps)
               className="flex-1 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-md"
             >
               <Users className="w-4 h-4" aria-hidden="true" />
-              Buat Grup Baru
+              Masuk & Buat Grup
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface SuccessModalProps {
-  matkul: MatkulItem | null;
-  onClose: () => void;
-}
-
-function SuccessModal({ matkul, onClose }: SuccessModalProps) {
-  if (!matkul) return null;
-
-  const groupCode = `${matkul.code}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose} role="presentation">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-center" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="success-title">
-        <div className="h-1.5 bg-gradient-to-r from-primary to-accent w-full" aria-hidden="true" />
-
-        <div className="p-8">
-          <div className="flex justify-center mb-5" aria-hidden="true">
-            <div className="w-16 h-16 rounded-2xl bg-green-50 border-2 border-green-200 flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-
-          <h3 className="text-foreground mb-2" id="success-title">Grup Berhasil Dibuat!</h3>
-          <p className="text-muted-foreground text-sm mb-6">
-            Grup belajar <strong>{matkul.name}</strong> telah dibuat. Bagikan kode berikut ke teman-temanmu!
-          </p>
-
-          <div className="bg-secondary rounded-xl p-5 mb-6 border border-primary/10">
-            <p className="text-muted-foreground text-xs mb-2" style={{ fontWeight: 600 }}>
-              KODE GRUP
-            </p>
-            <p className="text-primary tracking-[0.2em]" style={{ fontSize: '1.6rem', fontWeight: 800 }}>
-              {groupCode}
-            </p>
-          </div>
-
-          <button 
-            onClick={onClose} 
-            className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all text-sm font-medium shadow-md"
-            autoFocus
-          >
-            Selesai
-          </button>
         </div>
       </div>
     </div>
@@ -203,8 +153,6 @@ function SuccessModal({ matkul, onClose }: SuccessModalProps) {
 export function MatkulCatalog() {
   const [selectedMatkul, setSelectedMatkul] = useState<MatkulItem | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successMatkul, setSuccessMatkul] = useState<MatkulItem | null>(null);
 
   const handleCardClick = (matkul: MatkulItem) => {
     if (matkul.kelasAktif === 0) {
@@ -215,9 +163,8 @@ export function MatkulCatalog() {
 
   const handleConfirmCreate = () => {
     setShowCreateModal(false);
-    setSuccessMatkul(selectedMatkul);
-    setShowSuccessModal(true);
     setSelectedMatkul(null);
+    window.location.href = `${import.meta.env.BASE_URL}login`;
   };
 
   return (
@@ -331,15 +278,6 @@ export function MatkulCatalog() {
         />
       )}
 
-      {showSuccessModal && (
-        <SuccessModal
-          matkul={successMatkul}
-          onClose={() => {
-            setShowSuccessModal(false);
-            setSuccessMatkul(null);
-          }}
-        />
-      )}
     </>
   );
 }

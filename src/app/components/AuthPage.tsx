@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { BookOpen, Chrome, GraduationCap, Loader2, Lock, Mail, Play, UserRound } from 'lucide-react';
-import { useAuth, type UserRole } from '../context/AuthContext';
+import { ArrowLeft, Eye, EyeOff, Loader2, Lock, Mail, UserRound } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 type AuthMode = 'login' | 'signup';
 
@@ -21,7 +21,7 @@ export function AuthPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<Exclude<UserRole, 'admin'>>('student');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -45,7 +45,7 @@ export function AuthPage() {
       if (mode === 'login') {
         await signIn(email, password);
       } else {
-        await signUp(email, password, fullName, role);
+        await signUp(email, password, fullName);
         setMessage('Account created. Check your email if confirmation is enabled, then sign in.');
         setAuthMode('login');
       }
@@ -81,7 +81,7 @@ export function AuthPage() {
             className="absolute left-8 top-8 flex h-12 w-12 items-center justify-center rounded-lg bg-white/90 text-primary shadow-lg backdrop-blur transition hover:bg-black/10 on-click:ring-1 focus:outline-none focus:ring-primary focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             aria-label="Back to home"
           >
-            <Play className="h-6 w-6 fill-current" />
+            <ArrowLeft className="h-6 w-6" />
           </button>
         </section>
 
@@ -142,40 +142,24 @@ export function AuthPage() {
                 <span className="sr-only">Password</span>
                 <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  type="password"
+                  type={isPasswordVisible ? 'text' : 'password'}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="h-11 w-full rounded-lg border border-border pl-11 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="h-11 w-full rounded-lg border border-border pl-11 pr-11 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="Password"
                   minLength={6}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordVisible((visible) => !visible)}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  aria-label={isPasswordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
+                  aria-pressed={isPasswordVisible}
+                >
+                  {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </label>
-
-              {mode === 'signup' && (
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setRole('student')}
-                    className={`flex h-11 items-center justify-center gap-2 rounded-lg border text-sm transition ${
-                      role === 'student' ? 'border-primary bg-secondary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
-                    }`}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    Student
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('tutor')}
-                    className={`flex h-11 items-center justify-center gap-2 rounded-lg border text-sm transition ${
-                      role === 'tutor' ? 'border-primary bg-secondary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
-                    }`}
-                  >
-                    <GraduationCap className="h-4 w-4" />
-                    Tutor
-                  </button>
-                </div>
-              )}
 
               {mode === 'login' && (
                 <div className="text-right">
@@ -222,12 +206,23 @@ export function AuthPage() {
               disabled={isSubmitting}
               className="flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-border text-sm font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-5 w-5" />}
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleLogo />}
               Login dengan Google
             </button>
           </div>
         </section>
       </div>
     </main>
+  );
+}
+
+function GoogleLogo() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.2-1.9 2.8v2.3h3c1.8-1.6 2.9-4 2.9-6.8 0-.7-.1-1.4-.2-2H12z" />
+      <path fill="#34A853" d="M6.6 14.1l-.7.6-2.4 1.9C5 19.1 8.3 21 12 21c2.6 0 4.8-.9 6.4-2.5l-3-2.3c-.8.5-1.8.8-3.4.8-2.5 0-4.6-1.6-5.4-3.9z" />
+      <path fill="#FBBC05" d="M3.5 7.8c-.6 1.2-1 2.6-1 4.2s.4 3 1 4.2l3.1-2.5c-.2-.7-.3-1-.3-1.7s.1-1 .3-1.7L3.5 7.8z" />
+      <path fill="#4285F4" d="M12 5.1c1.4 0 2.7.5 3.8 1.5l2.8-2.8C16.8 2.2 14.6 1 12 1 8.3 1 5 2.9 3.5 7.8l3.1 2.5C7.4 6.6 9.5 5.1 12 5.1z" />
+    </svg>
   );
 }
