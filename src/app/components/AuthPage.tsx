@@ -133,7 +133,7 @@ export function AuthPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   className="h-11 w-full rounded-lg border border-border pl-11 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  placeholder="Email atau No. Telp"
+                  placeholder="Email"
                   required
                 />
               </label>

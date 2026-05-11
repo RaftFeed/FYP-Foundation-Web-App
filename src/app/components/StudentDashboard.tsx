@@ -1,26 +1,8 @@
-import {
-  ArrowUpRight,
-  Bell,
-  BookOpen,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  CircleCheck,
-  Clock3,
-  Home,
-  LogOut,
-  MapPin,
-  NotebookTabs,
-  Search,
-  Settings,
-  SquarePen,
-  UserRound,
-  Users,
-} from 'lucide-react';
+import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, CircleCheck, Clock3, Home, LogOut, MapPin, NotebookTabs, Search, Settings, SquarePen, UserRound, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { MatchmakingLobbyView } from './MatchmakingLobbyView';
+import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import {
   Booking,
@@ -79,9 +61,13 @@ export function StudentDashboard() {
   const [joinedLobbies, setJoinedLobbies] = useState<MatchmakingLobby[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [isSavingName, setIsSavingName] = useState(false);
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
+
+  const showNotice = (tone: NoticeModalState['tone'], message: string) => {
+    setNotice({ tone, message });
+  };
 
   const loadDashboard = async () => {
     if (!user) {
@@ -135,7 +121,7 @@ export function StudentDashboard() {
         profile: nextProfile,
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal memuat data dashboard.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memuat data dashboard.');
     } finally {
       setIsLoading(false);
     }
@@ -155,10 +141,10 @@ export function StudentDashboard() {
     setNotice(null);
     try {
       await cancelBooking(bookingId);
-      setNotice('Booking dibatalkan.');
+      showNotice('success', 'Booking dibatalkan.');
       await loadDashboard();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal membatalkan booking.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal membatalkan booking.');
     }
   };
 
@@ -169,7 +155,7 @@ export function StudentDashboard() {
 
     const trimmedName = nameInput.trim();
     if (!trimmedName) {
-      setNotice('Nama lengkap tidak boleh kosong.');
+      showNotice('error', 'Nama lengkap tidak boleh kosong.');
       return;
     }
 
@@ -179,9 +165,9 @@ export function StudentDashboard() {
       await updateProfileName(user.id, trimmedName);
       const nextProfile = await fetchProfileById(user.id);
       setProfile(nextProfile);
-      setNotice('Nama berhasil diperbarui.');
+      showNotice('success', 'Nama berhasil diperbarui.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal memperbarui nama.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui nama.');
     } finally {
       setIsSavingName(false);
     }
@@ -191,10 +177,10 @@ export function StudentDashboard() {
     setNotice(null);
     try {
       await leaveMatchmakingLobby(lobbyId);
-      setNotice('Berhasil keluar dari lobby grup.');
+      showNotice('success', 'Berhasil keluar dari lobby grup.');
       await loadDashboard();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal keluar dari lobby grup.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal keluar dari lobby grup.');
     }
   };
 
@@ -267,12 +253,6 @@ export function StudentDashboard() {
             </div>
           </header>
 
-          {notice && (
-            <div className="mb-5 rounded-lg border border-primary/20 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">
-              {notice}
-            </div>
-          )}
-
           {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} />}
           {activeView === 'lobbies' && <MatchmakingLobbyView onLobbyChange={() => void loadDashboard()} />}
           {activeView === 'bookings' && (
@@ -302,6 +282,8 @@ export function StudentDashboard() {
           )}
         </main>
       </div>
+
+      {notice && <NoticeModal notice={notice} onClose={() => setNotice(null)} />}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Banknote, CalendarDays, Clock3, Copy, Lock, RefreshCcw, Search, Users }
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
+import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
 import {
   MatchmakingLobby,
   MatchmakingLobbyVisibility,
@@ -39,11 +40,15 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
   const [lobbies, setLobbies] = useState<MatchmakingLobby[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [joinCode, setJoinCode] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:join-code` : null, '');
   const [form, setForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:create-form` : null, initialForm);
   const [activeModal, setActiveModal] = useState<'create' | 'join' | null>(null);
+
+  const showNotice = (tone: NoticeModalState['tone'], message: string) => {
+    setNotice({ tone, message });
+  };
 
   useEffect(() => {
     if (!copyToast) {
@@ -98,7 +103,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
         lobbies: nextLobbies,
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal memuat fitur lobby grup.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memuat fitur lobby grup.');
     } finally {
       setIsLoading(false);
     }
@@ -125,11 +130,11 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
     setNotice(null);
     try {
       await action();
-      setNotice(successMessage);
+      showNotice('success', successMessage);
       await loadData();
       onLobbyChange?.();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Aksi lobby gagal diproses.');
+      showNotice('error', error instanceof Error ? error.message : 'Aksi lobby gagal diproses.');
     } finally {
       setIsSubmitting(false);
     }
@@ -139,7 +144,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
     event.preventDefault();
 
     if (!form.availabilitySlotId) {
-      setNotice('Pilih slot tutor terlebih dahulu.');
+      showNotice('error', 'Pilih slot tutor terlebih dahulu.');
       return;
     }
 
@@ -164,7 +169,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
   const handleJoinByCode = async (event: FormEvent) => {
     event.preventDefault();
     if (!joinCode.trim()) {
-      setNotice('Masukkan kode lobby terlebih dahulu.');
+      showNotice('error', 'Masukkan kode lobby terlebih dahulu.');
       return;
     }
 
@@ -198,8 +203,6 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
           {copyToast}
         </div>
       )}
-
-      {notice && <div className="mb-5 rounded-lg border border-primary/20 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">{notice}</div>}
 
       <div className="space-y-5">
         <div className="flex flex-wrap gap-3">
@@ -390,6 +393,8 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
           </button>
         </form>
       </ModalFrame>
+
+      {notice && <NoticeModal notice={notice} onClose={() => setNotice(null)} />}
     </section>
   );
 }
