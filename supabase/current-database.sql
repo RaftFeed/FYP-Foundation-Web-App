@@ -9,25 +9,6 @@ CREATE TABLE public.admin_profiles (
   CONSTRAINT admin_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT admin_profiles_id_fkey FOREIGN KEY (id) REFERENCES public.profiles(id)
 );
-CREATE TABLE public.course_sessions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tutor_profile_id uuid NOT NULL,
-  subject_id uuid NOT NULL,
-  code text NOT NULL UNIQUE,
-  title text NOT NULL,
-  starts_at timestamp with time zone NOT NULL,
-  ends_at timestamp with time zone NOT NULL,
-  price_per_seat integer NOT NULL CHECK (price_per_seat >= 0),
-  capacity integer NOT NULL DEFAULT 4 CHECK (capacity > 0),
-  location text,
-  status USER-DEFINED NOT NULL DEFAULT 'scheduled'::session_status,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT course_sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT course_sessions_tutor_profile_id_fkey FOREIGN KEY (tutor_profile_id) REFERENCES public.tutor_profiles(id),
-  CONSTRAINT course_sessions_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
-  CONSTRAINT course_sessions_time_check CHECK (ends_at > starts_at)
-);
 CREATE TABLE public.bookings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   session_id uuid NOT NULL,
@@ -36,9 +17,8 @@ CREATE TABLE public.bookings (
   total_price integer NOT NULL CHECK (total_price >= 0),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  net_income integer DEFAULT 0 CHECK (net_income >= 0),
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
-  CONSTRAINT bookings_session_id_student_id_key UNIQUE (session_id, student_id),
-  CONSTRAINT bookings_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.course_sessions(id) ON DELETE CASCADE,
   CONSTRAINT bookings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.matchmaking_lobbies (
@@ -59,6 +39,7 @@ CREATE TABLE public.matchmaking_lobbies (
   expires_at timestamp with time zone NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  net_income integer DEFAULT 0 CHECK (net_income >= 0),
   CONSTRAINT matchmaking_lobbies_pkey PRIMARY KEY (id),
   CONSTRAINT matchmaking_lobbies_creator_id_fkey FOREIGN KEY (creator_id) REFERENCES public.profiles(id),
   CONSTRAINT matchmaking_lobbies_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
@@ -76,6 +57,19 @@ CREATE TABLE public.matchmaking_lobby_members (
   CONSTRAINT matchmaking_lobby_members_pkey PRIMARY KEY (id),
   CONSTRAINT matchmaking_lobby_members_lobby_id_fkey FOREIGN KEY (lobby_id) REFERENCES public.matchmaking_lobbies(id),
   CONSTRAINT matchmaking_lobby_members_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.matchmaking_lobby_payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  lobby_id uuid NOT NULL,
+  student_id uuid NOT NULL,
+  amount integer NOT NULL CHECK (amount >= 0),
+  status text NOT NULL DEFAULT 'paid'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text])),
+  payment_method text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT matchmaking_lobby_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT matchmaking_lobby_payments_lobby_id_fkey FOREIGN KEY (lobby_id) REFERENCES public.matchmaking_lobbies(id),
+  CONSTRAINT matchmaking_lobby_payments_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,

@@ -1,4 +1,4 @@
-import { Banknote, CalendarDays, Clock3, Copy, Lock, RefreshCcw, Search, Users } from 'lucide-react';
+import { Banknote, CalendarDays, Clock3, Copy, Lock, Search, Users } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
@@ -42,6 +42,10 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedDate, setSelectedDate] = useState('all');
+  const [selectedTutor, setSelectedTutor] = useState('all');
   const [joinCode, setJoinCode] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:join-code` : null, '');
   const [form, setForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:create-form` : null, initialForm);
   const [activeModal, setActiveModal] = useState<'create' | 'join' | null>(null);
@@ -71,6 +75,57 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
       }),
     [lobbies],
   );
+  const subjectOptions = useMemo(
+    () => Array.from(new Map(availableLobbies.map((lobby) => [lobby.subject_id, lobby.subject_name])).entries()),
+    [availableLobbies],
+  );
+  const tutorOptions = useMemo(
+    () => Array.from(new Set(availableLobbies.map((lobby) => lobby.tutor_name))).sort((left, right) => left.localeCompare(right, 'id-ID')),
+    [availableLobbies],
+  );
+  const dateOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          availableLobbies.map((lobby) => {
+            const key = getDateKey(lobby.starts_at);
+            return [key, formatDate(lobby.starts_at)] as const;
+          }),
+        ).entries(),
+      ).sort((left, right) => left[0].localeCompare(right[0])),
+    [availableLobbies],
+  );
+
+  const filteredLobbies = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return availableLobbies.filter((lobby) => {
+      if (selectedSubject !== 'all' && lobby.subject_id !== selectedSubject) {
+        return false;
+      }
+
+      if (selectedDate !== 'all' && getDateKey(lobby.starts_at) !== selectedDate) {
+        return false;
+      }
+
+      if (selectedTutor !== 'all' && lobby.tutor_name !== selectedTutor) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      return [
+        lobby.title,
+        lobby.code,
+        lobby.subject_name,
+        lobby.subject_code ?? '',
+        lobby.tutor_name,
+        lobby.description ?? '',
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+  }, [availableLobbies, searchQuery, selectedDate, selectedSubject, selectedTutor]);
 
   const loadData = async () => {
     if (!user) {
@@ -179,23 +234,11 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
   };
 
   return (
-    <section className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <section>
+      <div className="mb-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="mb-4 text-2xl font-semibold uppercase tracking-[0.22em] text-primary lg:text-3xl">Lobby Grup</p>
-          <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground">Matchmaking Kelas Patungan</h1>
-          <p className="max-w-3xl text-sm font-medium leading-relaxed text-muted-foreground">
-            Buat lobby dari jadwal kosong tutor, undang teman dengan kode private, atau gabung ke lobby public yang sudah tersedia.
-          </p>
+          <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Matchmaking Kelas</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadData()}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/20 bg-white px-4 text-sm font-semibold text-primary hover:bg-secondary"
-        >
-          <RefreshCcw className="h-4 w-4" />
-          Refresh
-        </button>
       </div>
 
       {copyToast && (
@@ -224,27 +267,86 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
           </button>
         </div>
 
+        <div className="rounded-2xl border border-primary/10 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,220px))]">
+            <label className="relative block lg:col-span-1">
+              <span className="sr-only">Cari lobby</span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Cari kelas, tutor, atau kode kelas"
+                className="h-10 w-full rounded-lg border border-primary/20 bg-white pl-10 pr-4 text-sm outline-none transition placeholder:text-muted-foreground/80 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+
+            <select
+              aria-label="Filter mata kuliah"
+              value={selectedSubject}
+              onChange={(event) => setSelectedSubject(event.target.value)}
+              className="h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">Semua Matkul</option>
+              {subjectOptions.map(([subjectId, subjectName]) => (
+                <option key={subjectId} value={subjectId}>
+                  {subjectName}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Filter tanggal"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">Semua Tanggal</option>
+              {dateOptions.map(([dateKey, label]) => (
+                <option key={dateKey} value={dateKey}>
+                  {label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Filter tutor"
+              value={selectedTutor}
+              onChange={(event) => setSelectedTutor(event.target.value)}
+              className="h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">Semua Tutor</option>
+              {tutorOptions.map((tutorName) => (
+                <option key={tutorName} value={tutorName}>
+                  {tutorName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div>
           <div className="mb-4 flex items-center justify-between gap-4">
             <h2 className="text-xl font-extrabold tracking-normal text-foreground">Lobby Tersedia</h2>
-            <p className="text-sm font-medium text-muted-foreground">{isLoading ? 'Memuat...' : `${availableLobbies.length} lobby terlihat`}</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              {isLoading ? 'Memuat...' : `${filteredLobbies.length} lobby terlihat`}
+            </p>
           </div>
 
-          <div className="space-y-4">
-            {!isLoading && availableLobbies.length === 0 && (
-              <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground shadow-md">
-                Belum ada lobby public yang bisa kamu ikuti sekarang.
-              </div>
+          <div className="overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-sm">
+            {!isLoading && filteredLobbies.length === 0 && (
+              <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada lobby public yang bisa kamu ikuti sekarang.</div>
             )}
-            {availableLobbies.map((lobby) => (
-              <LobbyCard
-                key={lobby.id}
-                lobby={lobby}
-                isSubmitting={isSubmitting}
-                onCopy={() => setCopyToast('Kode lobby disalin')}
-                onJoin={() => runAction(() => joinMatchmakingLobby(lobby.code), 'Berhasil bergabung ke lobby grup.')}
-              />
-            ))}
+            {!isLoading &&
+              filteredLobbies.map((lobby) => (
+                <LobbyCard
+                  key={lobby.id}
+                  lobby={lobby}
+                  isSubmitting={isSubmitting}
+                  onCopy={() => setCopyToast('Kode lobby disalin')}
+                  onJoin={() => runAction(() => joinMatchmakingLobby(lobby.code), 'Berhasil bergabung ke lobby grup.')}
+                />
+              ))}
           </div>
         </div>
       </div>
@@ -413,55 +515,68 @@ function LobbyCard({
   const activeMembers = lobby.member_count ?? 0;
   const canJoin = lobby.status === 'open' && !lobby.current_user_is_member && activeMembers < lobby.max_participants;
   const memberCountLabel = `${activeMembers}/${lobby.max_participants} siswa`;
+  const progressLabel = `${activeMembers}/${lobby.max_participants}`;
 
   return (
-    <article className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-primary/20 bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">{statusLabels[lobby.status]}</span>
-            <span className="rounded-md border border-border bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-              {lobby.visibility === 'private' ? 'Private' : 'Public'}
-            </span>
-          </div>
-          <h3 className="text-lg font-extrabold text-foreground">{lobby.title}</h3>
-          <p className="mt-1 text-sm font-medium text-muted-foreground">
-            {lobby.subject_name} bersama {lobby.tutor_name}
-          </p>
+    <article className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[112px_minmax(0,1fr)_260px] lg:items-stretch">
+      <div className="relative flex min-h-[120px] items-center justify-center rounded-2xl border border-primary/10 bg-secondary/70 text-primary">
+        <span className="absolute left-3 top-3 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-foreground shadow-sm">{progressLabel}</span>
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm">
+          <Users className="h-8 w-8" />
         </div>
-        <button
-          type="button"
-          onClick={async () => {
-            if (await copyLobbyCode(lobby.code)) {
-              onCopy();
-            }
-          }}
-          className="rounded-lg border-2 border-dashed border-primary/20 bg-secondary px-3 py-2 text-center transition hover:border-primary/40 hover:bg-primary/5"
-          aria-label={`Salin kode lobby ${lobby.code}`}
-          title="Klik untuk menyalin kode lobby"
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Kode</p>
-          <p className="mt-1 flex items-center justify-center gap-2 text-base font-extrabold tracking-[0.18em] text-primary">
+      </div>
+
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-md border border-primary/20 bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">{statusLabels[lobby.status]}</span>
+          <span className="rounded-md border border-border bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+            {lobby.visibility === 'private' ? 'Private' : 'Public'}
+          </span>
+        </div>
+
+        <h3 className="text-lg font-extrabold text-foreground lg:text-xl">{lobby.title}</h3>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">
+          {lobby.subject_name} bersama {lobby.tutor_name}
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-primary" />
+            {formatDate(lobby.starts_at)}
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <Clock3 className="h-4 w-4 text-primary" />
+            {formatTimeRange(lobby.starts_at, lobby.ends_at)}
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            {memberCountLabel}
+          </span>
+        </div>
+
+        {lobby.description && <p className="mt-4 rounded-xl bg-secondary p-3 text-sm font-medium text-muted-foreground">{lobby.description}</p>}
+      </div>
+
+      <div className="flex flex-col justify-between gap-3 border-t border-primary/10 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <div>
+          <p className="text-sm font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">Kode Kelas</p>
+          <button
+            type="button"
+            onClick={async () => {
+              if (await copyLobbyCode(lobby.code)) {
+                onCopy();
+              }
+            }}
+            className="mt-1 inline-flex items-center gap-2 rounded-lg border border-dashed border-primary/20 bg-secondary px-3 py-2 text-sm font-bold tracking-[0.18em] text-foreground transition hover:border-primary/40 hover:bg-primary/5"
+            aria-label={`Salin kode lobby ${lobby.code}`}
+            title="Klik untuk menyalin kode lobby"
+          >
             {lobby.code}
             <Copy className="h-4 w-4" />
-          </p>
-        </button>
-      </div>
-
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InfoItem icon={CalendarDays} label="Tanggal" value={formatDate(lobby.starts_at)} />
-        <InfoItem icon={Clock3} label="Jam" value={formatTimeRange(lobby.starts_at, lobby.ends_at)} />
-        <InfoItem icon={Users} label="Anggota" value={memberCountLabel} />
-        <InfoItem icon={Banknote} label="Patungan" value={`${formatCurrency(lobby.price_per_member)} / siswa`} />
-      </div>
-
-      {lobby.description && <p className="mb-4 rounded-lg bg-secondary p-3 text-sm font-medium text-muted-foreground">{lobby.description}</p>}
-
-      <div className="flex flex-col gap-3 border-t border-primary/10 pt-4 md:flex-row md:items-center md:justify-between">
-        <div className="text-sm font-medium text-muted-foreground">
-          <p>Total kelas {formatCurrency(lobby.price_total)}</p>
-          {lobby.status === 'open' && <p>Timer selesai {formatDate(lobby.expires_at)} {formatTimeRange(lobby.expires_at, lobby.expires_at)}</p>}
+          </button>
         </div>
+
         <div className="flex flex-wrap gap-2">
           {canJoin && (
             <button
@@ -470,13 +585,17 @@ function LobbyCard({
               disabled={isSubmitting}
               className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
             >
-              Gabung
+              Lihat Detail & Gabung
             </button>
           )}
         </div>
       </div>
     </article>
   );
+}
+
+function getDateKey(value: string) {
+  return value.slice(0, 10);
 }
 
 function ModalFrame({

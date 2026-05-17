@@ -331,7 +331,7 @@ export async function fetchMatchmakingLobbies() {
           location
         )
       `)
-      .in('status', ['open', 'pending_payment', 'paid'])
+      .in('status', ['open', 'pending_payment', 'paid', 'cancelled', 'completed'])
       .order('created_at', { ascending: false }),
     supabase
       .from('matchmaking_lobby_members')
