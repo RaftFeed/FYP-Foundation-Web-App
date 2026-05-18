@@ -100,6 +100,20 @@ export async function uploadAvatar(file: File, userId: string): Promise<string> 
   const fileExt = compressedFile.name.split('.').pop() || 'jpg';
   const filePath = `${userId}/${Date.now()}.${fileExt}`;
 
+  // Clean up old avatars in storage to avoid storage bloat
+  try {
+    const { data: existingFiles, error: listError } = await supabase.storage
+      .from('avatars')
+      .list(userId);
+
+    if (!listError && existingFiles && existingFiles.length > 0) {
+      const filesToDelete = existingFiles.map((f) => `${userId}/${f.name}`);
+      await supabase.storage.from('avatars').remove(filesToDelete);
+    }
+  } catch (err) {
+    console.error('Failed to clean up old avatars:', err);
+  }
+
   const { error: uploadError } = await supabase.storage
     .from('avatars')
     .upload(filePath, compressedFile, {

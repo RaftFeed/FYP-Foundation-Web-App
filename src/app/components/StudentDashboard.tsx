@@ -94,6 +94,7 @@ export function StudentDashboard() {
   const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [isSavingName, setIsSavingName] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
   const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
@@ -284,18 +285,75 @@ export function StudentDashboard() {
                 {bookings.some((booking) => booking.status === 'pending_payment') && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />}
               </button>
 
-              <div className="flex items-center gap-3">
+              <div className="relative flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsHeaderDropdownOpen(!isHeaderDropdownOpen)}
+                  className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/70 active:scale-95 focus:outline-none transition-all duration-200"
+                >
+                  {displayName}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isHeaderDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="h-11 w-11 rounded-full object-cover border border-primary/20 bg-white" />
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="h-11 w-11 cursor-pointer rounded-full border border-primary/20 bg-white object-cover hover:border-primary/50 hover:scale-105 active:scale-95 transition-all duration-200"
+                    onClick={() => setIsHeaderDropdownOpen(!isHeaderDropdownOpen)}
+                  />
                 ) : (
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                  <div
+                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 hover:scale-105 active:scale-95 transition-all duration-200"
+                    onClick={() => setIsHeaderDropdownOpen(!isHeaderDropdownOpen)}
+                  >
                     <UserRound className="h-7 w-7 text-primary" />
                   </div>
                 )}
-                <button type="button" className="flex items-center gap-2 text-sm font-semibold text-primary">
-                  {displayName}
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+
+                {isHeaderDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsHeaderDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-primary/10 bg-white p-2 shadow-lg z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveView('profile');
+                          setIsHeaderDropdownOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-primary transition"
+                      >
+                        <UserRound className="h-4 w-4" />
+                        Profil
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveView('settings');
+                          setIsHeaderDropdownOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-primary transition"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Pengaturan
+                      </button>
+                      <hr className="my-1 border-primary/10" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHeaderDropdownOpen(false);
+                          void signOut();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 transition"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Keluar
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </header>
