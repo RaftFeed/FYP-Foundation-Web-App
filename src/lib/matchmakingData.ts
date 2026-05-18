@@ -168,7 +168,7 @@ export async function fetchAvailableTutorSlots() {
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows((data ?? []) as TutorAvailabilityRow[]);
+  return mapTutorAvailabilityRows(data ?? []);
 }
 
 export async function fetchMyTutorAvailability(tutorUserId: string, startIso: string, endIso: string) {
@@ -210,7 +210,7 @@ export async function fetchMyTutorAvailability(tutorUserId: string, startIso: st
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows((data ?? []) as TutorAvailabilityRow[]);
+  return mapTutorAvailabilityRows(data ?? []);
 }
 
 export async function fetchAdminTutorAvailability() {
@@ -249,7 +249,7 @@ export async function fetchAdminTutorAvailability() {
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows((data ?? []) as TutorAvailabilityRow[]);
+  return mapTutorAvailabilityRows(data ?? []);
 }
 
 export async function fetchStudentTutorScheduleSlots() {
@@ -293,7 +293,7 @@ export async function fetchStudentTutorScheduleSlots() {
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows((data ?? []) as TutorAvailabilityRow[]);
+  return mapTutorAvailabilityRows(data ?? []);
 }
 
 export async function fetchMatchmakingLobbies() {
@@ -540,32 +540,36 @@ export async function cancelTutorAvailability(slotId: string) {
   throwIfError(error);
 }
 
-function mapTutorAvailabilityRows(rows: TutorAvailabilityRow[]) {
-  return rows.map((row) => ({
-    id: row.id,
-    tutor_profile_id: row.tutor_profile_id,
-    tutor_user_id: row.tutor?.user_id ?? null,
-    tutor_name: row.tutor?.full_name ?? '-',
-    tutor_rating: Number(row.tutor?.rating ?? 0),
-    tutor_reviews_count: Number(row.tutor?.reviews_count ?? 0),
-    tutor_image_url: row.tutor?.image_url ?? null,
-    tutor_status: row.tutor?.status ?? 'pending',
-    subject_id: row.subject_id,
-    subject_name: row.subject?.name ?? 'Mata Kuliah',
-    subject_code: row.subject?.code ?? null,
-    starts_at: row.starts_at,
-    ends_at: row.ends_at,
-    location: row.location ?? 'Online',
-    meeting_url: row.meeting_url,
-    price_total: Number(row.price_total ?? 0),
-    max_participants: Number(row.max_participants ?? 0),
-    status: row.status,
-    notes: row.notes,
-    recurrence_group_id: row.recurrence_group_id,
-    recurrence_pattern: row.recurrence_pattern,
-    recurrence_index: row.recurrence_index,
-    active_lobby_id: null,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  } satisfies TutorAvailabilitySlot));
+function mapTutorAvailabilityRows(rows: any[]): TutorAvailabilitySlot[] {
+  return rows.map((row) => {
+    const subject = Array.isArray(row.subject) ? row.subject[0] : row.subject;
+    const tutor = Array.isArray(row.tutor) ? row.tutor[0] : row.tutor;
+    return {
+      id: row.id,
+      tutor_profile_id: row.tutor_profile_id,
+      tutor_user_id: tutor?.user_id ?? null,
+      tutor_name: tutor?.full_name ?? '-',
+      tutor_rating: Number(tutor?.rating ?? 0),
+      tutor_reviews_count: Number(tutor?.reviews_count ?? 0),
+      tutor_image_url: tutor?.image_url ?? null,
+      tutor_status: tutor?.status ?? 'pending',
+      subject_id: row.subject_id,
+      subject_name: subject?.name ?? 'Mata Kuliah',
+      subject_code: subject?.code ?? null,
+      starts_at: row.starts_at,
+      ends_at: row.ends_at,
+      location: row.location ?? 'Online',
+      meeting_url: row.meeting_url,
+      price_total: Number(row.price_total ?? 0),
+      max_participants: Number(row.max_participants ?? 0),
+      status: row.status,
+      notes: row.notes,
+      recurrence_group_id: row.recurrence_group_id,
+      recurrence_pattern: row.recurrence_pattern,
+      recurrence_index: row.recurrence_index,
+      active_lobby_id: null,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    } satisfies TutorAvailabilitySlot;
+  });
 }

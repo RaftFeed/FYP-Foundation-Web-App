@@ -22,7 +22,6 @@ import {
   formatDate,
   formatTimeRange,
   SubjectMatchmakingSummary,
-  updateProfileName,
   type Profile,
 } from '../../lib/dashboardData';
 import {
@@ -82,7 +81,9 @@ export function StudentDashboard() {
   const stateKeyPrefix = user ? `student-dashboard:${user.id}` : null;
   const [activeView, setActiveView] = usePersistentState<StudentView>(stateKeyPrefix ? `${stateKeyPrefix}:active-view` : null, 'dashboard');
   const [query, setQuery] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:course-query` : null, '');
-  const [nameInput, setNameInput] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:name-input` : null, '');
+  const [profileForm, setProfileForm] = useState({
+    fullName: '',
+  });
   const [availableTutorSlots, setAvailableTutorSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [scheduleTutorSlots, setScheduleTutorSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [subjects, setSubjects] = useState<SubjectMatchmakingSummary[]>([]);
@@ -92,7 +93,9 @@ export function StudentDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [isSavingName, setIsSavingName] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
+  const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   const showNotice = (tone: NoticeModalState['tone'], message: string) => {
     setNotice({ tone, message });
@@ -141,6 +144,7 @@ export function StudentDashboard() {
       setBookings(nextBookings);
       setJoinedLobbies(nextJoinedLobbies);
       setProfile(nextProfile);
+
       writeLocalCache(cacheKey, {
         availableTutorSlots: nextAvailableTutorSlots,
         scheduleTutorSlots: nextScheduleTutorSlots,
@@ -160,11 +164,7 @@ export function StudentDashboard() {
     void loadDashboard();
   }, [user?.id]);
 
-  useEffect(() => {
-    if (profile?.full_name && !nameInput.trim()) {
-      setNameInput(profile.full_name);
-    }
-  }, [nameInput, profile?.full_name, setNameInput]);
+
 
   const handleCancel = async (bookingId: string) => {
     setNotice(null);
@@ -177,26 +177,52 @@ export function StudentDashboard() {
     }
   };
 
-  const handleNameSave = async () => {
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+    setIsUploadingAvatar(true);
+    setNotice(null);
+    try {
+      const { uploadAvatar } = await import('../../lib/storage');
+      const newAvatarUrl = await uploadAvatar(file, user.id);
+
+      const { supabase } = await import('../../lib/supabase');
+      await supabase.auth.updateUser({
+        data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
+      });
+      showNotice('success', 'Foto profil berhasil diperbarui.');
+      await loadDashboard(); // To refetch session or profiles if needed
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui foto profil.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleProfileSave = async () => {
     if (!user) {
       return;
     }
 
-    const trimmedName = nameInput.trim();
+    const trimmedName = profileForm.fullName.trim();
     if (!trimmedName) {
-      showNotice('error', 'Nama lengkap tidak boleh kosong.');
+      showNotice('error', 'Tidak ada perubahan yang dilakukan.');
       return;
     }
 
     setIsSavingName(true);
     setNotice(null);
     try {
-      await updateProfileName(user.id, trimmedName);
+      const { updateProfileDetails } = await import('../../lib/dashboardData');
+      await updateProfileDetails(user.id, {
+        full_name: trimmedName,
+      });
+
       const nextProfile = await fetchProfileById(user.id);
       setProfile(nextProfile);
-      showNotice('success', 'Nama berhasil diperbarui.');
+      showNotice('success', 'Profil berhasil diperbarui.');
+      setProfileForm({ fullName: '' });
     } catch (error) {
-      showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui nama.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui profil.');
     } finally {
       setIsSavingName(false);
     }
@@ -244,7 +270,7 @@ export function StudentDashboard() {
         </aside>
 
         <main className="px-3 py-5 lg:px-5 lg:py-6">
-          <header className="flex items-center justify-between gap-4">
+          <header className="flex items-center justify-between gap- pb-4">
             <h1 className="text-2xl font-bold uppercase tracking-[0.22em] text-primary">
               {navigation.find((item) => item.view === activeView)?.label || 'Dashboard'}
             </h1>
@@ -259,9 +285,13 @@ export function StudentDashboard() {
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                  <UserRound className="h-7 w-7 text-primary" />
-                </div>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="h-11 w-11 rounded-full object-cover border border-primary/20 bg-white" />
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                    <UserRound className="h-7 w-7 text-primary" />
+                  </div>
+                )}
                 <button type="button" className="flex items-center gap-2 text-sm font-semibold text-primary">
                   {displayName}
                   <ChevronDown className="h-4 w-4" />
@@ -278,7 +308,7 @@ export function StudentDashboard() {
               joinedLobbies={joinedLobbies}
               onCancel={handleCancel}
               onLeaveLobby={handleLeaveLobby}
-              onPay={async (bookingId) => {
+              onPay={async (bookingId: string) => {
                 try {
                   await updateBookingStatus(bookingId, 'upcoming');
                   showNotice('success', 'Pembayaran berhasil. Status booking telah diperbarui.');
@@ -294,13 +324,14 @@ export function StudentDashboard() {
           {activeView === 'settings' && <SettingsView showNotice={showNotice} />}
           {activeView === 'profile' && (
             <ProfileView
-              bookings={bookings}
-              displayName={displayName}
-              email={user?.email ?? ''}
-              isSavingName={isSavingName}
-              nameInput={nameInput}
-              onNameChange={setNameInput}
-              onNameSave={handleNameSave}
+              profileForm={profileForm}
+              setProfileForm={setProfileForm}
+              onProfileSave={handleProfileSave}
+              onAvatarSelect={handleAvatarUpload}
+              isSaving={isSavingName}
+              isUploadingAvatar={isUploadingAvatar}
+              avatarUrl={avatarUrl}
+              profile={profile}
             />
           )}
           {activeView === 'dashboard' && (

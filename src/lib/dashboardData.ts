@@ -259,7 +259,7 @@ export async function fetchApprovedTutorCards(limit = 6) {
   });
 }
 
-export async function fetchAdminBookings() {
+export async function fetchAdminBookings(): Promise<Booking[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select(`
@@ -274,10 +274,12 @@ export async function fetchAdminBookings() {
     .order('created_at', { ascending: false });
 
   throwIfError(error);
-  return ((data ?? []) as Booking[]).map((booking) => ({
+  
+  return ((data ?? []) as any[]).map((booking) => ({
     ...booking,
+    student: Array.isArray(booking.student) ? booking.student[0] : (booking.student ?? null),
     session: null,
-  }));
+  })) as Booking[];
 }
 
 export async function fetchProfiles() {
@@ -366,10 +368,13 @@ export async function updateProfileRole(id: string, role: UserRole) {
   throwIfError(error);
 }
 
-export async function updateProfileName(id: string, fullName: string) {
+export async function updateProfileDetails(
+  id: string,
+  updates: { full_name?: string; }
+) {
   const { data, error } = await supabase
     .from('profiles')
-    .update({ full_name: fullName.trim() })
+    .update(updates)
     .eq('id', id)
     .select();
 

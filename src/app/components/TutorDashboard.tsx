@@ -1,5 +1,5 @@
 import { ArrowUpRight, BookOpen, CalendarDays, ChevronDown, Clock3, Home, LogOut, RefreshCcw, Save, Settings, Trash2, UserRound } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -94,11 +94,13 @@ export function TutorDashboard() {
   const [selectedMonth, setSelectedMonth] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:selected-month` : null, monthValue(new Date()));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const monthRange = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
   const slotRepeatMode = slotForm.repeatMode === 'weekly' || Boolean((slotForm as typeof emptySlotForm & { repeatWeekly?: boolean }).repeatWeekly) ? 'weekly' : 'once';
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
+  const avatarUrl = user?.user_metadata?.custom_avatar_url || profile?.image_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
   const approved = profile?.status === 'approved';
   const currentSlots = slots.filter((slot) => slot.status !== 'cancelled');
   const availableSlots = slots.filter((slot) => slot.status === 'available');
@@ -210,6 +212,36 @@ export function TutorDashboard() {
       setNotice(error instanceof Error ? error.message : 'Gagal menyimpan profil tutor.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+    setIsUploadingAvatar(true);
+    setNotice(null);
+    try {
+      const { uploadAvatar } = await import('../../lib/storage');
+      const newAvatarUrl = await uploadAvatar(file, user.id);
+      
+      const savedProfile = await upsertMyTutorProfile({
+        fullName: profileForm.fullName,
+        subjectId: profileForm.subjectId,
+        hourlyRate: Number(profileForm.hourlyRate),
+        bio: profileForm.bio,
+        imageUrl: newAvatarUrl,
+      });
+      setProfile(savedProfile);
+      setProfileForm(prev => ({ ...prev, imageUrl: newAvatarUrl }));
+      setNotice('Foto profil tutor berhasil diperbarui.');
+      
+      const { supabase } = await import('../../lib/supabase');
+      await supabase.auth.updateUser({
+        data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
+      });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Gagal mengupload foto profil.');
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -327,9 +359,13 @@ export function TutorDashboard() {
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                  <UserRound className="h-7 w-7 text-primary" />
-                </div>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="h-11 w-11 rounded-full object-cover border border-primary/20 bg-white" />
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                    <UserRound className="h-7 w-7 text-primary" />
+                  </div>
+                )}
                 <button type="button" className="flex items-center gap-2 text-sm font-semibold text-primary">
                   {displayName}
                   <ChevronDown className="h-4 w-4" />
@@ -373,7 +409,10 @@ export function TutorDashboard() {
                 profileForm={profileForm}
                 subjects={subjects}
                 onSubmit={handleProfileSubmit}
+                onAvatarSelect={handleAvatarUpload}
                 setProfileForm={setProfileForm}
+                isUploadingAvatar={isUploadingAvatar}
+                avatarUrl={avatarUrl}
               />
             )}
 
@@ -682,6 +721,9 @@ function ProfileView({
   subjects,
   onSubmit,
   setProfileForm,
+  avatarUrl,
+  onAvatarSelect,
+  isUploadingAvatar,
 }: {
   approved: boolean;
   isSaving: boolean;
@@ -689,14 +731,50 @@ function ProfileView({
   profileForm: typeof emptyProfileForm;
   subjects: Subject[];
   onSubmit: (event: FormEvent) => void;
+  onAvatarSelect: (file: File) => void;
   setProfileForm: React.Dispatch<React.SetStateAction<typeof emptyProfileForm>>;
+  isUploadingAvatar?: boolean;
+  avatarUrl?: string | null;
 }) {
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const displayUrl = avatarFile ? URL.createObjectURL(avatarFile) : avatarUrl;
+
   return (
     <section className="mx-auto max-w-3xl rounded-2xl border border-primary/10 bg-white p-6 shadow-md">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
-          <UserRound className="h-5 w-5" />
+      <div className="mb-5 flex items-center gap-4">
+        <div 
+          className="group relative h-16 w-16 cursor-pointer overflow-hidden rounded-full border border-primary/20"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {displayUrl ? (
+            <img src={displayUrl} alt="Profile" className="h-full w-full object-cover bg-white" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-secondary text-primary">
+              <UserRound className="h-9 w-9" />
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="text-[10px] font-bold text-white uppercase text-center">
+              {isUploadingAvatar ? 'Menyimpan...' : (
+                <>Ubah<br/>Foto</>
+              )}
+            </span>
+          </div>
         </div>
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          accept="image/*"
+          disabled={isUploadingAvatar}
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              setAvatarFile(e.target.files[0]);
+              onAvatarSelect(e.target.files[0]);
+            }
+          }}
+        />
         <div>
           <h1 className="text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Atur identitas tutor</h1>
           <p className="text-xs font-medium text-muted-foreground">{profile?.status ?? 'Belum dibuat'} · {approved ? 'approved' : 'pending'}</p>
@@ -719,7 +797,6 @@ function ProfileView({
           value={String(profileForm.hourlyRate)}
           onChange={(value) => setProfileForm({ ...profileForm, hourlyRate: Number(value) })}
         />
-        <TutorTextInput label="Foto URL" value={profileForm.imageUrl} onChange={(value) => setProfileForm({ ...profileForm, imageUrl: value })} />
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-semibold text-foreground">Bio singkat</span>
           <textarea
