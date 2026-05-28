@@ -378,7 +378,7 @@ export function StudentDashboard() {
               stateKeyPrefix={stateKeyPrefix}
             />
           )}
-          {activeView === 'schedule' && <TutorScheduleView slots={scheduleTutorSlots} />}
+          {activeView === 'schedule' && <TutorScheduleView slots={scheduleTutorSlots} isStudentView />}
           {activeView === 'settings' && <SettingsView showNotice={showNotice} />}
           {activeView === 'profile' && (
             <ProfileView

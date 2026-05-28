@@ -10,6 +10,7 @@ import {
   formatTimeRange,
 } from '../../../../lib/dashboardData';
 import { MatchmakingLobby, MatchmakingLobbyStatus } from '../../../../lib/matchmakingData';
+import { LobbyDetailModal } from '../tutor-dashboard/SlotCard';
 
 type BookingTab = 'Semua' | 'Mendatang' | 'Selesai' | 'Dibatalkan' | 'Menunggu Pembayaran';
 
@@ -42,6 +43,7 @@ export function BookingsView({
   onPay: (bookingId: string) => Promise<void>;
   stateKeyPrefix: string | null;
 }) {
+  const [activeLobbyDetail, setActiveLobbyDetail] = useState<MatchmakingLobby | null>(null);
   const [activeTab, setActiveTab] = usePersistentState<BookingTab>(stateKeyPrefix ? `${stateKeyPrefix}:booking-tab` : null, 'Semua');
   const [paymentModalBooking, setPaymentModalBooking] = useState<Booking | null>(null);
   const visibleBookings = useMemo(() => {
@@ -91,7 +93,7 @@ export function BookingsView({
 
         <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
           {visibleJoinedLobbies.map((lobby) => (
-            <JoinedLobbyRow key={lobby.id} lobby={lobby} onLeave={onLeaveLobby} />
+            <JoinedLobbyRow key={lobby.id} lobby={lobby} onLeave={onLeaveLobby} onShowDetail={() => setActiveLobbyDetail(lobby)} />
           ))}
         </div>
       </div>
@@ -138,11 +140,15 @@ export function BookingsView({
           </div>
         </div>
       )}
+
+      {activeLobbyDetail && (
+        <LobbyDetailModal lobby={activeLobbyDetail} onClose={() => setActiveLobbyDetail(null)} />
+      )}
     </section>
   );
 }
 
-export function JoinedLobbyRow({ lobby, onLeave }: { lobby: MatchmakingLobby; onLeave: (lobbyId: string) => void }) {
+export function JoinedLobbyRow({ lobby, onLeave, onShowDetail }: { lobby: MatchmakingLobby; onLeave: (lobbyId: string) => void; onShowDetail: () => void }) {
   const memberCount = lobby.member_count ?? 0;
   const canLeave = lobby.status !== 'completed' && lobby.status !== 'cancelled';
 
@@ -167,16 +173,26 @@ export function JoinedLobbyRow({ lobby, onLeave }: { lobby: MatchmakingLobby; on
         <p className="font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
         <p className="mt-1">Kode {lobby.code}</p>
         <p className="mt-1">{lobby.location}</p>
-        {canLeave && (
+        <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
           <button
             type="button"
-            onClick={() => onLeave(lobby.id)}
-            className="mt-3 h-10 rounded-lg border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-300"
+            onClick={onShowDetail}
+            className="h-10 rounded-lg border border-primary/20 bg-white px-4 text-sm font-semibold text-primary transition hover:bg-secondary"
           >
-            Keluar
+            Lihat Detail
           </button>
-        )}
+          {canLeave && (
+            <button
+              type="button"
+              onClick={() => onLeave(lobby.id)}
+              className="h-10 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-300"
+            >
+              Keluar
+            </button>
+          )}
+        </div>
       </div>
+
     </article>
   );
 }
@@ -185,6 +201,7 @@ export function BookingRow({ booking, onCancel, onPay }: { booking: Booking; onC
   const session = booking.session;
   const bookingLabel = session?.subject?.name ?? session?.title ?? `Booking ${booking.id.slice(0, 8)}`;
   const createdAtLabel = formatDate(booking.created_at);
+  const [showCancel, setShowCancel] = useState(false);
 
   return (
     <article className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[92px_1fr_220px] lg:items-center">
@@ -235,11 +252,39 @@ export function BookingRow({ booking, onCancel, onPay }: { booking: Booking; onC
           {onCancel && booking.status !== 'cancelled' && booking.status !== 'completed' && (
             <button
               type="button"
-              onClick={() => onCancel(booking.id)}
-              className="h-10 rounded-lg border border-primary/20 px-5 text-sm font-semibold text-primary hover:bg-secondary lg:mt-2"
+              onClick={() => setShowCancel(true)}
+              className="h-10 rounded-lg border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 hover:bg-red-100 hover:border-red-300 lg:mt-2"
             >
               Batalkan
             </button>
+          )}
+
+          {showCancel && onCancel && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+              <div className="w-full max-w-sm rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
+                <h2 className="mb-2 text-lg font-extrabold text-foreground">Batalkan Booking?</h2>
+                <p className="mb-5 text-sm font-medium text-muted-foreground">
+                  Booking <span className="font-semibold text-foreground">{bookingLabel}</span> senilai{' '}
+                  <span className="font-bold text-foreground">{formatCurrency(booking.total_price)}</span> akan dibatalkan. Tindakan ini tidak bisa dibatalkan.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowCancel(false)}
+                    className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition"
+                  >
+                    Kembali
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowCancel(false); onCancel(booking.id); }}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition"
+                  >
+                    Ya, Batalkan
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

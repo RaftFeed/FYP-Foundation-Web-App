@@ -156,6 +156,23 @@ export async function cancelBooking(bookingId: string) {
     .eq('id', bookingId);
 
   throwIfError(error);
+
+  // Verify the update actually took effect — protects against silent RLS rewrites
+  // or calls against rows that don't exist / don't belong to the caller.
+  const { data: verify, error: verifyError } = await supabase
+    .from('bookings')
+    .select('status')
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  throwIfError(verifyError);
+
+  if (!verify) {
+    throw new Error('Booking tidak ditemukan. Mungkin sudah dihapus atau bukan milik Anda.');
+  }
+  if (verify.status !== 'cancelled') {
+    throw new Error('Gagal membatalkan booking. Anda tidak memiliki izin untuk membatalkan booking ini.');
+  }
 }
 
 export async function fetchSubjects() {

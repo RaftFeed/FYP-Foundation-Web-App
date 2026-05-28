@@ -32,6 +32,21 @@ export interface TutorAvailabilitySlot {
   updated_at: string;
 }
 
+export interface SlotStudent {
+  student_email: string;
+  student_name: string;
+  status: string;
+  joined_at: string;
+}
+
+export async function fetchSlotStudents(slotId: string): Promise<SlotStudent[]> {
+  const { data, error } = await supabase.rpc('get_slot_students', { target_slot_id: slotId });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return (data ?? []) as SlotStudent[];
+}
+
 type TutorAvailabilityRow = {
   id: string;
   tutor_profile_id: string;
@@ -296,6 +311,113 @@ export async function fetchStudentTutorScheduleSlots() {
   return mapTutorAvailabilityRows(data ?? []);
 }
 
+export async function fetchLobbyForSlot(slotId: string): Promise<MatchmakingLobby | null> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  throwIfError(authError);
+  const currentUserId = authData.user?.id ?? null;
+
+  const { data: lobbies, error: lobbiesError } = await supabase
+    .from('matchmaking_lobbies')
+    .select(`
+      *,
+      creator:profiles!matchmaking_lobbies_creator_id_fkey (
+        full_name,
+        email
+      ),
+      subject:subjects (
+        name,
+        code
+      ),
+      tutor:tutor_profiles (
+        full_name,
+        rating,
+        reviews_count,
+        image_url
+      ),
+      slot:tutor_availability_slots (
+        starts_at,
+        ends_at,
+        location
+      )
+    `)
+    .eq('availability_slot_id', slotId)
+    .in('status', ['open', 'pending_payment', 'paid'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  throwIfError(lobbiesError);
+
+  const lobby = (lobbies ?? [])[0] as {
+    id: string;
+    code: string;
+    creator_id: string;
+    subject_id: string;
+    tutor_profile_id: string;
+    availability_slot_id: string;
+    course_session_id: string | null;
+    title: string;
+    description: string | null;
+    visibility: MatchmakingLobbyVisibility;
+    status: MatchmakingLobbyStatus;
+    min_participants: number;
+    max_participants: number;
+    price_total: number;
+    expires_at: string;
+    created_at: string;
+    updated_at: string;
+    creator: { full_name: string | null; email: string | null } | null;
+    subject: { name: string; code: string | null } | null;
+    tutor: { full_name: string; rating: number; reviews_count: number; image_url: string | null } | null;
+    slot: { starts_at: string; ends_at: string; location: string | null } | null;
+  } | undefined;
+
+  if (!lobby) return null;
+
+  const { data: memberships } = await supabase
+    .from('matchmaking_lobby_members')
+    .select('lobby_id, student_id, status')
+    .eq('status', 'active');
+
+  const memberCount = (memberships ?? []).filter((m) => m.lobby_id === lobby.id).length;
+  const isMember = (memberships ?? []).some((m) => m.lobby_id === lobby.id && m.student_id === currentUserId);
+
+  return {
+    id: lobby.id,
+    code: lobby.code,
+    creator_id: lobby.creator_id,
+    creator_name: lobby.creator?.full_name ?? lobby.creator?.email ?? null,
+    subject_id: lobby.subject_id,
+    subject_name: lobby.subject?.name ?? lobby.title,
+    subject_code: lobby.subject?.code ?? null,
+    tutor_profile_id: lobby.tutor_profile_id,
+    tutor_name: lobby.tutor?.full_name ?? '-',
+    tutor_rating: Number(lobby.tutor?.rating ?? 0),
+    tutor_reviews_count: Number(lobby.tutor?.reviews_count ?? 0),
+    tutor_image_url: lobby.tutor?.image_url ?? null,
+    availability_slot_id: lobby.availability_slot_id,
+    starts_at: lobby.slot?.starts_at ?? lobby.created_at,
+    ends_at: lobby.slot?.ends_at ?? lobby.expires_at,
+    location: lobby.slot?.location ?? 'Online',
+    course_session_id: lobby.course_session_id,
+    title: lobby.title,
+    description: lobby.description,
+    visibility: lobby.visibility,
+    status: lobby.status,
+    min_participants: lobby.min_participants,
+    max_participants: lobby.max_participants,
+    price_total: Number(lobby.price_total ?? 0),
+    price_per_member: Math.ceil(
+      Number(lobby.price_total ?? 0) / Math.max(memberCount, 1),
+    ),
+    member_count: memberCount,
+    expires_at: lobby.expires_at,
+    current_user_is_member: isMember,
+    current_user_is_creator: lobby.creator_id === currentUserId,
+    created_at: lobby.created_at,
+    updated_at: lobby.updated_at,
+  } satisfies MatchmakingLobby;
+}
+
 export async function fetchMatchmakingLobbies() {
   await refreshExpiredLobbies();
 
@@ -538,6 +660,23 @@ export async function cancelTutorAvailability(slotId: string) {
   });
 
   throwIfError(error);
+
+  // Verify the update actually took effect — guards against RPC that silently
+  // succeeds without affecting any row (e.g. RLS filter, already-cancelled row).
+  const { data: verify, error: verifyError } = await supabase
+    .from('tutor_availability_slots')
+    .select('status')
+    .eq('id', slotId)
+    .maybeSingle();
+
+  throwIfError(verifyError);
+
+  if (!verify) {
+    throw new Error('Slot tidak ditemukan. Mungkin sudah dihapus atau bukan milik Anda.');
+  }
+  if (verify.status !== 'cancelled') {
+    throw new Error('Gagal membatalkan slot. Slot mungkin sudah di-booking oleh siswa atau Anda tidak memiliki izin.');
+  }
 }
 
 function mapTutorAvailabilityRows(rows: any[]): TutorAvailabilitySlot[] {

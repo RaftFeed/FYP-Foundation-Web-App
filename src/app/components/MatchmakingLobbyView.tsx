@@ -12,6 +12,7 @@ import {
   fetchMatchmakingLobbies,
   joinMatchmakingLobby,
 } from '../../lib/matchmakingData';
+import { LobbyDetailModal } from './ui/tutor-dashboard/SlotCard';
 import { formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
 
 const statusLabels: Record<MatchmakingLobby['status'], string> = {
@@ -49,6 +50,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
   const [joinCode, setJoinCode] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:join-code` : null, '');
   const [form, setForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:create-form` : null, initialForm);
   const [activeModal, setActiveModal] = useState<'create' | 'join' | null>(null);
+  const [activeLobbyDetail, setActiveLobbyDetail] = useState<MatchmakingLobby | null>(null);
 
   const showNotice = (tone: NoticeModalState['tone'], message: string) => {
     setNotice({ tone, message });
@@ -345,6 +347,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
                   isSubmitting={isSubmitting}
                   onCopy={() => setCopyToast('Kode lobby disalin')}
                   onJoin={() => runAction(() => joinMatchmakingLobby(lobby.code), 'Berhasil bergabung ke lobby grup.')}
+                  onShowDetail={() => setActiveLobbyDetail(lobby)}
                 />
               ))}
           </div>
@@ -497,6 +500,10 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
       </ModalFrame>
 
       {notice && <NoticeModal notice={notice} onClose={() => setNotice(null)} />}
+
+      {activeLobbyDetail && (
+        <LobbyDetailModal lobby={activeLobbyDetail} onClose={() => setActiveLobbyDetail(null)} />
+      )}
     </section>
   );
 }
@@ -506,11 +513,13 @@ function LobbyCard({
   lobby,
   onCopy,
   onJoin,
+  onShowDetail,
 }: {
   isSubmitting: boolean;
   lobby: MatchmakingLobby;
   onCopy: () => void;
   onJoin: () => void;
+  onShowDetail: () => void;
 }) {
   const activeMembers = lobby.member_count ?? 0;
   const canJoin = lobby.status === 'open' && !lobby.current_user_is_member && activeMembers < lobby.max_participants;
@@ -578,6 +587,13 @@ function LobbyCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onShowDetail}
+            className="h-10 rounded-lg border border-primary/20 bg-white px-4 text-sm font-semibold text-primary hover:bg-secondary"
+          >
+            Lihat Detail
+          </button>
           {canJoin && (
             <button
               type="button"
@@ -585,7 +601,7 @@ function LobbyCard({
               disabled={isSubmitting}
               className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
             >
-              Lihat Detail & Gabung
+              Gabung
             </button>
           )}
         </div>

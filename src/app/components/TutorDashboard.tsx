@@ -1,5 +1,5 @@
-import { ArrowUpRight, BookOpen, CalendarDays, ChevronDown, Clock3, Home, LogOut, RefreshCcw, Save, Settings, Trash2, UserRound, X } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, BookOpen, CalendarDays, ChevronDown, Home, LogOut, RefreshCcw, Save, Settings, Trash2, UserRound, X } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { Subject, fetchSubjects, formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
 import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
+import { SlotCard, StudentListModal } from './ui/tutor-dashboard/SlotCard';
 import {
   TutorAvailabilitySlot,
   TutorSelfProfile,
@@ -27,13 +28,6 @@ import {
   fetchMyTutorProfile,
   upsertMyTutorProfile,
 } from '../../lib/matchmakingData';
-
-const slotStatusLabels: Record<TutorAvailabilitySlot['status'], string> = {
-  available: 'Tersedia',
-  held: 'Di-hold Lobby',
-  booked: 'Terbooking',
-  cancelled: 'Dibatalkan',
-};
 
 const emptyProfileForm = {
   fullName: '',
@@ -667,6 +661,8 @@ function DashboardView({
   setActiveView: (view: TutorView) => void;
   slots: TutorAvailabilitySlot[];
 }) {
+  const [studentModalSlot, setStudentModalSlot] = useState<TutorAvailabilitySlot | null>(null);
+
   const upcomingSlots = slots
     .filter((slot) => slot.status !== 'cancelled')
     .slice()
@@ -744,33 +740,11 @@ function DashboardView({
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
+          <div className="space-y-4">
             {isLoading && <div className="p-6 text-sm font-medium text-muted-foreground">Memuat slot tutor...</div>}
             {!isLoading && upcomingSlots.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada slot aktif untuk ditampilkan.</div>}
             {upcomingSlots.map((slot) => (
-              <article key={slot.id} className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[92px_1fr_180px] lg:items-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-primary/10 bg-secondary text-primary">
-                  <CalendarDays className="h-8 w-8" />
-                </div>
-                <div>
-                  <h3 className="mb-1 text-base font-extrabold text-foreground">{slot.subject_name}</h3>
-                  <p className="mb-2 text-sm font-medium text-muted-foreground">{slot.location}</p>
-                  <div className="flex flex-col gap-2 text-sm font-medium text-foreground sm:flex-row sm:gap-5">
-                    <p className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                      {formatDate(slot.starts_at)}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Clock3 className="h-4 w-4 text-primary" />
-                      {formatTimeRange(slot.starts_at, slot.ends_at)}
-                    </p>
-                  </div>
-                </div>
-                <div className="lg:text-right">
-                  <p className="mb-2 inline-flex rounded-lg border border-primary/20 bg-secondary px-3 py-1 text-xs font-semibold text-primary">{slotStatusLabels[slot.status]}</p>
-                  <p className="text-base font-semibold text-primary">{formatCurrency(slot.price_total)}</p>
-                </div>
-              </article>
+              <SlotCard key={slot.id} slot={slot} onViewStudents={setStudentModalSlot} />
             ))}
           </div>
 
@@ -815,6 +789,10 @@ function DashboardView({
           </div>
         </section>
       </div>
+
+      {studentModalSlot && (
+        <StudentListModal slot={studentModalSlot} onClose={() => setStudentModalSlot(null)} />
+      )}
     </section>
   );
 }
@@ -950,6 +928,24 @@ function SlotManagementView({
   subjects: Subject[];
   setSlotForm: React.Dispatch<React.SetStateAction<typeof emptySlotForm>>;
 }) {
+  const [confirmCancelSlot, setConfirmCancelSlot] = useState<TutorAvailabilitySlot | null>(null);
+  const [studentModalSlot, setStudentModalSlot] = useState<TutorAvailabilitySlot | null>(null);
+
+  const visibleSlots = useMemo(
+    () => slots.filter((s) => s.status !== 'cancelled'),
+    [slots],
+  );
+
+  const handleOpenCancel = useCallback((slot: TutorAvailabilitySlot) => {
+    setConfirmCancelSlot(slot);
+  }, []);
+
+  const handleConfirmCancel = useCallback(async () => {
+    if (!confirmCancelSlot) return;
+    const slotId = confirmCancelSlot.id;
+    setConfirmCancelSlot(null);
+    await onCancelSlot(slotId);
+  }, [confirmCancelSlot, onCancelSlot]);
   return (
     <section>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -960,7 +956,7 @@ function SlotManagementView({
           </p>
         </div>
         <div className="rounded-lg border border-primary/10 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">
-          {isLoading ? 'Memuat data...' : `${slots.length} slot pada bulan ini`}
+          {isLoading ? 'Memuat data...' : `${visibleSlots.length} slot pada bulan ini`}
         </div>
       </div>
 
@@ -1038,7 +1034,7 @@ function SlotManagementView({
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-extrabold tracking-normal text-foreground">Jadwal Bulanan</h2>
-              <p className="text-sm font-medium text-muted-foreground">{slots.length} slot pada bulan ini</p>
+              <p className="text-sm font-medium text-muted-foreground">{visibleSlots.length} slot pada bulan ini</p>
             </div>
             <label className="block">
               <span className="sr-only">Bulan jadwal</span>
@@ -1052,57 +1048,58 @@ function SlotManagementView({
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {!isLoading && slots.length === 0 && (
+            {!isLoading && visibleSlots.length === 0 && (
               <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground shadow-md lg:col-span-2">
                 Belum ada slot pada bulan ini.
               </div>
             )}
-            {slots.map((slot) => (
-              <article key={slot.id} className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <span className="mb-2 inline-flex rounded-md border border-primary/20 bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">
-                      {slotStatusLabels[slot.status]}
-                    </span>
-                    {slot.recurrence_pattern === 'weekly' && (
-                      <span className="mb-2 ml-2 inline-flex rounded-md border border-primary/10 bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                        Mingguan #{slot.recurrence_index + 1}
-                      </span>
-                    )}
-                    <h3 className="text-lg font-extrabold text-foreground">{slot.subject_name}</h3>
-                    <p className="mt-1 text-sm font-medium text-muted-foreground">{slot.location}</p>
-                  </div>
-                  <p className="text-right text-sm font-extrabold text-primary">{formatCurrency(slot.price_total)}</p>
-                </div>
-                <div className="mb-4 space-y-2 text-sm font-medium text-foreground">
-                  <p className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                    {formatDate(slot.starts_at)}
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <Clock3 className="h-4 w-4 text-primary" />
-                    {formatTimeRange(slot.starts_at, slot.ends_at)}
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <UserRound className="h-4 w-4 text-primary" />
-                    Maksimal {slot.max_participants} siswa
-                  </p>
-                </div>
-                {slot.notes && <p className="mb-4 rounded-lg bg-secondary p-3 text-sm font-medium text-muted-foreground">{slot.notes}</p>}
-                <button
-                  type="button"
-                  disabled={isSaving || slot.status !== 'available'}
-                  onClick={() => void onCancelSlot(slot.id)}
-                  className="flex h-10 items-center gap-2 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary hover:bg-secondary disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Batalkan Slot
-                </button>
-              </article>
+            {visibleSlots.map((slot) => (
+              <SlotCard
+                key={slot.id}
+                slot={slot}
+                onViewStudents={setStudentModalSlot}
+                onCancel={handleOpenCancel}
+                showCancel={slot.status === 'available'}
+              />
             ))}
           </div>
         </section>
       </div>
+
+      {confirmCancelSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
+            <h2 className="mb-2 text-lg font-extrabold text-foreground">Batalkan Slot?</h2>
+            <p className="mb-5 text-sm font-medium text-muted-foreground">
+              Slot <span className="font-semibold text-foreground">{confirmCancelSlot.subject_name}</span> pada{' '}
+              <span className="font-semibold text-foreground">{formatDate(confirmCancelSlot.starts_at)}</span>{' '}
+              ({formatTimeRange(confirmCancelSlot.starts_at, confirmCancelSlot.ends_at)}) akan dibatalkan.
+              Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmCancelSlot(null)}
+                className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition"
+              >
+                Kembali
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmCancel()}
+                disabled={isSaving}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                Ya, Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {studentModalSlot && (
+        <StudentListModal slot={studentModalSlot} onClose={() => setStudentModalSlot(null)} />
+      )}
     </section>
   );
 }
