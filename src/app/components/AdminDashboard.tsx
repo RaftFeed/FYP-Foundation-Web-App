@@ -278,9 +278,16 @@ export function AdminDashboard() {
 
           {activeTab === 'tutors' && (
             <TutorsPanel
+              editingId={editingTutorId}
               form={tutorForm}
+              isAddingTutor={isAddingTutor}
               subjects={subjects}
               tutors={tutors}
+              onAdd={() => {
+                setEditingTutorId(null);
+                setTutorForm(emptyTutor);
+                setIsAddingTutor(true);
+              }}
               onChange={setTutorForm}
               onSubmit={handleTutorSubmit}
               onEdit={(tutor) => {
@@ -301,6 +308,7 @@ export function AdminDashboard() {
                 setEditingTutorId(null);
                 setTutorForm(emptyTutor);
               }}
+              onSetIsAddingTutor={setIsAddingTutor}
             />
           )}
 
@@ -390,21 +398,27 @@ function SubjectsPanel({
 function TutorsPanel({
   editingId,
   form,
+  isAddingTutor,
+  onAdd,
   onCancel,
   onChange,
   onDelete,
   onEdit,
   onSubmit,
+  onSetIsAddingTutor,
   subjects,
   tutors,
 }: {
   editingId: string | null;
   form: typeof emptyTutor;
+  isAddingTutor: boolean;
+  onAdd: () => void;
   onCancel: () => void;
   onChange: (form: typeof emptyTutor) => void;
   onDelete: (id: string) => void;
   onEdit: (tutor: TutorProfile) => void;
   onSubmit: (event: FormEvent) => void;
+  onSetIsAddingTutor: (value: boolean) => void;
   subjects: Subject[];
   tutors: TutorProfile[];
 }) {
@@ -414,11 +428,7 @@ function TutorsPanel({
         <p className="text-sm font-medium text-muted-foreground">{tutors.length} tutor terdaftar</p>
         <button
           type="button"
-          onClick={() => {
-            setEditingTutorId(null);
-            setTutorForm(emptyTutor);
-            setIsAddingTutor(true);
-          }}
+          onClick={onAdd}
           className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition"
         >
           <GraduationCap className="h-4 w-4" />
@@ -445,7 +455,7 @@ function TutorsPanel({
           onChange={onChange}
           onSubmit={onSubmit}
           onCancel={() => {
-            setIsAddingTutor(false);
+            onSetIsAddingTutor(false);
             onCancel();
           }}
         />
