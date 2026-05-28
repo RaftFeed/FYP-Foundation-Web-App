@@ -95,6 +95,7 @@ export function StudentDashboard() {
   const [isSavingName, setIsSavingName] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
+  const [pendingLobbySlotId, setPendingLobbySlotId] = useState<string | null>(null);
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
   const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
@@ -359,7 +360,13 @@ export function StudentDashboard() {
           </header>
 
           {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} />}
-          {activeView === 'lobbies' && <MatchmakingLobbyView onLobbyChange={() => void loadDashboard()} />}
+          {activeView === 'lobbies' && (
+            <MatchmakingLobbyView
+              onLobbyChange={() => void loadDashboard()}
+              initialSlotId={pendingLobbySlotId}
+              onInitialSlotConsumed={() => setPendingLobbySlotId(null)}
+            />
+          )}
           {activeView === 'bookings' && (
             <BookingsView
               bookings={bookings}
@@ -378,7 +385,16 @@ export function StudentDashboard() {
               stateKeyPrefix={stateKeyPrefix}
             />
           )}
-          {activeView === 'schedule' && <TutorScheduleView slots={scheduleTutorSlots} isStudentView />}
+          {activeView === 'schedule' && (
+            <TutorScheduleView
+              slots={scheduleTutorSlots}
+              isStudentView
+              onCreateLobby={(slotId) => {
+                setPendingLobbySlotId(slotId);
+                setActiveView('lobbies');
+              }}
+            />
+          )}
           {activeView === 'settings' && <SettingsView showNotice={showNotice} />}
           {activeView === 'profile' && (
             <ProfileView

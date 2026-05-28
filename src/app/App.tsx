@@ -141,6 +141,7 @@ function AppContent() {
                 <span className="text-primary">Siap Membantumu</span>
               </h2>
             </div>
+
           </div>
 
           <div className="flex gap-8 items-start">

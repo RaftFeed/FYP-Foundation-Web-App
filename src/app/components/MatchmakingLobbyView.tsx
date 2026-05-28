@@ -1,5 +1,5 @@
 import { Banknote, CalendarDays, Clock3, Copy, Lock, Search, Users } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
@@ -12,6 +12,7 @@ import {
   fetchMatchmakingLobbies,
   joinMatchmakingLobby,
 } from '../../lib/matchmakingData';
+import { useLobbyRealtime } from '../../lib/useLobbyRealtime';
 import { LobbyDetailModal } from './ui/tutor-dashboard/SlotCard';
 import { formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
 
@@ -29,12 +30,20 @@ const initialForm = {
   title: '',
   description: '',
   visibility: 'public' as MatchmakingLobbyVisibility,
-  minParticipants: 2,
-  maxParticipants: 4,
+  minParticipants: 1,
+  maxParticipants: 10,
   timerHours: 6,
 };
 
-export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => void }) {
+export function MatchmakingLobbyView({
+  onLobbyChange,
+  initialSlotId,
+  onInitialSlotConsumed,
+}: {
+  onLobbyChange?: () => void;
+  initialSlotId?: string | null;
+  onInitialSlotConsumed?: () => void;
+}) {
   const { user } = useAuth();
   const stateKeyPrefix = user ? `matchmaking:${user.id}` : null;
   const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
@@ -129,7 +138,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
     });
   }, [availableLobbies, searchQuery, selectedDate, selectedSubject, selectedTutor]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) {
       return;
     }
@@ -164,11 +173,29 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
+  // Initial fetch
   useEffect(() => {
     void loadData();
-  }, [user?.id]);
+  }, [loadData]);
+
+  // Subscribe to realtime changes — auto-refresh when lobbies or members change
+  useLobbyRealtime(loadData);
+
+  useEffect(() => {
+    if (initialSlotId && slots.length > 0) {
+      const slotExists = slots.some((slot) => slot.id === initialSlotId);
+      if (slotExists) {
+        setForm((current) => ({
+          ...current,
+          availabilitySlotId: initialSlotId,
+        }));
+        setActiveModal('create');
+      }
+      onInitialSlotConsumed?.();
+    }
+  }, [initialSlotId, slots, onInitialSlotConsumed, setForm]);
 
   useEffect(() => {
     if (!selectedSlot) {
@@ -420,20 +447,20 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
                 onChange={(event) => setForm({ ...form, timerHours: Number(event.target.value) })}
                 className="h-11 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               >
-                <option value="3">3 jam</option>
-                <option value="6">6 jam</option>
-                <option value="12">12 jam</option>
-                <option value="24">24 jam</option>
+                <option value="24">1 hari</option>
+                <option value="48">2 hari</option>
+                <option value="72">3 hari</option>
+                <option value="168">7 hari</option>
               </select>
             </label>
           </div>
 
           <div className="mb-4 grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-foreground">Minimal</span>
+              <span className="mb-1 block text-sm font-semibold text-foreground">Minimal Peserta</span>
               <input
                 type="number"
-                min={2}
+                min={1}
                 max={form.maxParticipants}
                 value={form.minParticipants}
                 onChange={(event) => setForm({ ...form, minParticipants: Number(event.target.value) })}
@@ -441,7 +468,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-foreground">Maksimal</span>
+              <span className="mb-1 block text-sm font-semibold text-foreground">Maksimal Peserta</span>
               <input
                 type="number"
                 min={form.minParticipants}

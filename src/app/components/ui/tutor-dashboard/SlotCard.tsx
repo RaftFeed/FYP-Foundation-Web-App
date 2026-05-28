@@ -29,12 +29,14 @@ export function SlotCard({
   onViewStudents,
   onViewLobby,
   onCancel,
+  onCreateLobby,
   showCancel = true,
 }: {
   slot: TutorAvailabilitySlot;
   onViewStudents?: (slot: TutorAvailabilitySlot) => void;
   onViewLobby?: (slotId: string) => void | Promise<void>;
   onCancel?: (slot: TutorAvailabilitySlot) => void;
+  onCreateLobby?: (slotId: string) => void;
   showCancel?: boolean;
 }) {
   const canCancel = showCancel && slot.status === 'available';
@@ -93,6 +95,16 @@ export function SlotCard({
           >
             <Users className="h-4 w-4" />
             Lihat Siswa
+          </button>
+        )}
+        {onCreateLobby && slot.status === 'available' && (
+          <button
+            type="button"
+            onClick={() => onCreateLobby(slot.id)}
+            className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition shadow-sm"
+          >
+            <Users className="h-4 w-4" />
+            Buat Lobby
           </button>
         )}
         {onCancel && canCancel && (
