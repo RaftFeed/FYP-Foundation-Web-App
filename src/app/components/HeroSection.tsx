@@ -31,17 +31,9 @@ export function HeroSection() {
 
   return (
     <section id="beranda" className="bg-white overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 py-16 lg:py-24">
+      <div className="max-w-7xl mx-auto px-6 py-16 lg:py-30">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="order-2 lg:order-1">
-            <div
-              className="inline-flex items-center gap-2 bg-secondary border border-primary/20 text-primary px-4 py-1.5 rounded-full mb-6 text-sm"
-              style={{ fontWeight: 600 }}
-            >
-              <span className="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
-              Platform Tutor PPKU Terpercaya
-            </div>
-
+          <div className="order-2 lg:order-1 text-left">
             <h1 className="text-foreground mb-5">
               Pilih Mata Kuliah &{' '}
               <span className="relative inline-block text-primary pb-2">
@@ -70,36 +62,10 @@ export function HeroSection() {
               buat sesi privat bersama tutor terbaik.
             </p>
 
-            <div className="flex gap-3 mb-8 bg-white border-2 border-border rounded-xl p-2 shadow-md hover:border-primary/50 focus-within:border-primary focus-within:shadow-lg transition-all max-w-lg">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" aria-hidden="true" />
-                <input
-                  type="text"
-                  placeholder="Cari Mata Kuliah..."
-                  value={searchInput}
-                  onChange={(e) => {
-                    setSearchInput(e.target.value);
-                    setShowResults(e.target.value.trim().length > 0);
-                  }}
-                  onFocus={() => setShowResults(searchInput.trim().length > 0)}
-                  className="w-full pl-10 pr-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm"
-                  aria-label="Cari mata kuliah"
-                  aria-autocomplete="list"
-                  aria-controls="search-suggestions"
-                />
-              </div>
-              <button 
-                className="px-5 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 active:scale-95 transition-all text-sm flex items-center gap-2 shrink-0 font-medium"
-                aria-label="Cari"
-              >
-                Cari
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
 
             {/* Search Suggestions */}
             {showResults && filteredCourses.length > 0 && (
-              <div 
+              <div
                 id="search-suggestions"
                 className="mb-8 bg-white border border-border rounded-xl shadow-lg overflow-hidden max-w-lg"
                 role="listbox"
@@ -120,30 +86,10 @@ export function HeroSection() {
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2 mb-10">
-              <span className="text-sm text-muted-foreground mr-1" style={{ fontWeight: 600 }}>
-                Populer:
-              </span>
-              {['Fisika Dasar', 'Kalkulus', 'Kimia Dasar', 'Pemrograman'].map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => handleCourseSelect(tag)}
-                  className={`text-sm px-3.5 py-1.5 rounded-full border transition-all ${
-                    selectedCourse === tag
-                      ? 'bg-primary text-white border-primary'
-                      : 'border-border text-muted-foreground hover:border-primary hover:text-primary hover:bg-secondary'
-                  }`}
-                  aria-pressed={selectedCourse === tag}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {stats.map(({ icon: Icon, value, label }) => (
-                <div key={label} className="text-center">
-                  <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                <div key={label} className="text-left">
+                  <div className="flex items-center gap-1.5 mb-0.5">
                     <Icon className="w-4 h-4 text-primary" />
                     <span className="text-primary" style={{ fontSize: '1.4rem', fontWeight: 800 }}>
                       {value}
@@ -191,7 +137,7 @@ export function HeroSection() {
                 </div>
                 <div>
                   <p className="text-foreground" style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-                    4.9 / 5
+                    4.9+ / 5
                   </p>
                   <p className="text-muted-foreground" style={{ fontSize: '0.72rem' }}>
                     Rating Tutor
@@ -204,7 +150,7 @@ export function HeroSection() {
                 style={{ fontWeight: 700 }}
               >
                 <BookOpen className="w-4 h-4" />
-                24 Kelas Aktif
+                20+ Kelas Aktif
               </div>
 
               <div className="absolute -bottom-4 -left-4 w-16 h-16 opacity-20">

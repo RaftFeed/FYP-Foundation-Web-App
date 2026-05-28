@@ -128,22 +128,19 @@ function AppContent() {
       <HowItWorks />
       <Testimonials />
 
-        {/* Katalog Tutor */}
+      {/* Katalog Tutor */}
       <section id="katalog" className="py-20 bg-secondary">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-10 gap-4">
             <div>
-              <p className="text-primary text-sm mb-2" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              {/* <p className="text-primary text-sm mb-2" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Temukan Tutor
-              </p>
+              </p> */}
               <h2 className="text-foreground">
                 Tutor Terbaik<br />
                 <span className="text-primary">Siap Membantumu</span>
               </h2>
             </div>
-            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-              Pilih tutor terverifikasi berdasarkan mata kuliah, harga, dan rating terbaik.
-            </p>
           </div>
 
           <div className="flex gap-8 items-start">

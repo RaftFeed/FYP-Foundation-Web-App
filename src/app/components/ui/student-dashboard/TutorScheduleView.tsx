@@ -101,17 +101,18 @@ export function TutorScheduleView({ slots }: { slots: TutorAvailabilitySlot[] })
   }, [monthSessions]);
 
   const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
+  const totalRows = calendarDays.length / 7;
 
   return (
-    <section>
-
-      <div className="rounded-2xl border border-primary/10 bg-white p-4 shadow-md lg:p-5">
-        <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <section className="flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+      <div className="flex flex-1 flex-col rounded-2xl border border-primary/10 bg-white p-3 shadow-md lg:p-4">
+        {/* Filters */}
+        <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary"
               aria-label="Bulan sebelumnya"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -119,7 +120,7 @@ export function TutorScheduleView({ slots }: { slots: TutorAvailabilitySlot[] })
             <button
               type="button"
               onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary"
               aria-label="Bulan berikutnya"
             >
               <ChevronRight className="h-4 w-4" />
@@ -127,19 +128,19 @@ export function TutorScheduleView({ slots }: { slots: TutorAvailabilitySlot[] })
             <button
               type="button"
               onClick={() => setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
-              className="rounded-lg border border-primary/15 px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-secondary"
+              className="rounded-lg border border-primary/15 px-3 py-1.5 text-sm font-semibold text-foreground transition hover:bg-secondary"
             >
               {new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(currentMonth)}
             </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:w-[420px]">
+          <div className="grid gap-2 sm:grid-cols-2 xl:w-[380px]">
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mata Kuliah</span>
+              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mata Kuliah</span>
               <select
                 value={selectedSubject}
                 onChange={(event) => setSelectedSubject(event.target.value)}
-                className="h-10 w-full rounded-lg border border-primary/15 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-8 w-full rounded-lg border border-primary/15 bg-white px-2 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
               >
                 <option value="all">Semua Matkul</option>
                 {subjectOptions.slice(1).map((subject) => (
@@ -151,11 +152,11 @@ export function TutorScheduleView({ slots }: { slots: TutorAvailabilitySlot[] })
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Tutor</span>
+              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Tutor</span>
               <select
                 value={selectedTutor}
                 onChange={(event) => setSelectedTutor(event.target.value)}
-                className="h-10 w-full rounded-lg border border-primary/15 bg-white px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-8 w-full rounded-lg border border-primary/15 bg-white px-2 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
               >
                 <option value="all">Semua Tutor</option>
                 {tutorOptions.slice(1).map((tutor) => (
@@ -169,54 +170,94 @@ export function TutorScheduleView({ slots }: { slots: TutorAvailabilitySlot[] })
         </div>
 
         {slots.length === 0 && (
-          <div className="mb-5 rounded-xl border border-primary/10 bg-secondary/30 px-4 py-3 text-sm font-medium text-muted-foreground">
+          <div className="mb-3 rounded-xl border border-primary/10 bg-secondary/30 px-3 py-2 text-xs font-medium text-muted-foreground">
             Belum ada jadwal tutor yang tersedia untuk ditampilkan.
           </div>
         )}
 
-        <div className="overflow-hidden rounded-2xl border border-primary/10">
-          <div className="grid grid-cols-7 border-b border-primary/10 bg-secondary/60">
+        {/* Calendar grid — NO overflow-hidden so tooltips can escape */}
+        <div className="flex flex-1 flex-col rounded-2xl border border-primary/10">
+          <div className="grid grid-cols-7 border-b border-primary/10 bg-secondary/60 rounded-t-2xl">
             {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((day) => (
-              <div key={day} className="px-3 py-3 text-center text-sm font-bold text-foreground">
+              <div key={day} className="px-2 py-1.5 text-center text-xs font-bold text-foreground">
                 {day}
               </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7">
-            {calendarDays.map((day) => {
+          {/* Grid rows stretch evenly to fill remaining height */}
+          <div
+            className="grid flex-1 grid-cols-7"
+            style={{ gridTemplateRows: `repeat(${totalRows}, 1fr)` }}
+          >
+            {calendarDays.map((day, i) => {
               const daySessions = groupedByDay.get(day.key) ?? [];
               const isToday = day.key === getDateKey(today);
               const isHovered = hoveredDateKey === day.key;
 
+              const colIndex = i % 7;
+              const rowIndex = Math.floor(i / 7);
+
+              // Show tooltip above for the last 2 rows
+              const showAbove = rowIndex >= totalRows - 2;
+
+              // Align tooltip horizontally based on column
+              let horizontalClass = 'left-1/2 -translate-x-1/2';
+              let arrowHorizontalClass = 'left-1/2 -translate-x-1/2';
+              if (colIndex < 2) {
+                horizontalClass = 'left-0';
+                arrowHorizontalClass = 'left-6';
+              } else if (colIndex > 4) {
+                horizontalClass = 'right-0';
+                arrowHorizontalClass = 'right-6';
+              }
+
               return (
                 <div
                   key={day.key}
-                  className={`relative min-h-[108px] border-b border-r border-primary/10 p-3 text-left align-top transition sm:min-h-[118px] ${day.isCurrentMonth ? 'bg-white hover:bg-secondary/40' : 'bg-secondary/30 text-muted-foreground/70'
-                    } ${isHovered ? 'z-20 bg-primary/[0.05]' : ''}`}
+                  className={`relative border-b border-r border-primary/10 p-2 text-left align-top transition ${
+                    day.isCurrentMonth ? 'bg-white hover:bg-secondary/40' : 'bg-secondary/30 text-muted-foreground/70'
+                  } ${isHovered ? 'z-20 bg-primary/[0.05]' : ''}`}
                   onMouseEnter={() => setHoveredDateKey(daySessions.length > 0 ? day.key : null)}
                   onMouseLeave={() => setHoveredDateKey((current) => (current === day.key ? null : current))}
                 >
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-1 flex items-center justify-between">
                     <span
-                      className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-semibold ${isToday ? 'bg-primary text-white' : isHovered ? 'bg-primary/10 text-primary' : 'text-foreground'
-                        }`}
+                      className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${
+                        isToday ? 'bg-primary text-white' : isHovered ? 'bg-primary/10 text-primary' : 'text-foreground'
+                      }`}
                     >
                       {day.date.getDate()}
                     </span>
-                    {daySessions.length > 0 && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">{daySessions.length}</span>}
+                    {daySessions.length > 0 && (
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        {daySessions.length}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {daySessions.slice(0, 4).map((session) => (
-                      <span key={session.id} className="h-2.5 w-2.5 rounded-full bg-primary" aria-hidden="true" />
+                  <div className="flex flex-wrap gap-1">
+                    {daySessions.slice(0, 3).map((session) => (
+                      <span key={session.id} className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
                     ))}
-                    {daySessions.length > 4 && <span className="text-[11px] font-bold text-primary">+{daySessions.length - 4}</span>}
+                    {daySessions.length > 3 && (
+                      <span className="text-[10px] font-bold leading-none text-primary">+{daySessions.length - 3}</span>
+                    )}
                   </div>
 
                   {isHovered && daySessions.length > 0 && (
-                    <div className="absolute left-1/2 top-[calc(100%-8px)] z-30 w-[280px] -translate-x-1/2 rounded-2xl border border-primary/15 bg-white p-4 text-left shadow-2xl">
-                      <div className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 border-l border-t border-primary/15 bg-white" />
+                    <div
+                      className={`absolute z-30 w-[280px] rounded-2xl border border-primary/15 bg-white p-4 text-left shadow-2xl ${horizontalClass} ${
+                        showAbove ? 'bottom-[calc(100%-8px)]' : 'top-[calc(100%-8px)]'
+                      }`}
+                    >
+                      <div
+                        className={`absolute h-4 w-4 rotate-45 bg-white ${arrowHorizontalClass} ${
+                          showAbove
+                            ? '-bottom-2 border-b border-r border-primary/15'
+                            : '-top-2 border-l border-t border-primary/15'
+                        }`}
+                      />
                       <div className="relative">
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Detail Jadwal</p>
                         <h2 className="mt-2 text-base font-extrabold text-foreground">{formatCalendarHeading(day.key)}</h2>

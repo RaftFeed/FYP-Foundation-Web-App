@@ -1,4 +1,4 @@
-import { ArrowUpRight, BookOpen, CalendarDays, ChevronDown, Clock3, Home, LogOut, RefreshCcw, Save, Settings, Trash2, UserRound } from 'lucide-react';
+import { ArrowUpRight, BookOpen, CalendarDays, ChevronDown, Clock3, Home, LogOut, RefreshCcw, Save, Settings, Trash2, UserRound, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Chart as ChartJS,
@@ -76,9 +76,9 @@ type TutorView = 'dashboard' | 'profile' | 'slots' | 'schedule' | 'settings';
 
 const navigation = [
   { label: 'Dashboard', icon: Home, view: 'dashboard' },
-  { label: 'Profil', icon: UserRound, view: 'profile' },
   { label: 'Slot Jadwal', icon: BookOpen, view: 'slots' },
   { label: 'Jadwal Bulanan', icon: CalendarDays, view: 'schedule' },
+  { label: 'Profil', icon: UserRound, view: 'profile' },
   { label: 'Pengaturan', icon: Settings, view: 'settings' },
 ] satisfies Array<{ label: string; icon: typeof Home; view: TutorView }>;
 
@@ -97,6 +97,7 @@ export function TutorDashboard() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isNoticeVisible, setIsNoticeVisible] = useState(false);
 
   const monthRange = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
   const slotRepeatMode = slotForm.repeatMode === 'weekly' || Boolean((slotForm as typeof emptySlotForm & { repeatWeekly?: boolean }).repeatWeekly) ? 'weekly' : 'once';
@@ -188,6 +189,25 @@ export function TutorDashboard() {
     void loadSlots();
   }, [user?.id, selectedMonth]);
 
+  useEffect(() => {
+    if (notice) {
+      setIsNoticeVisible(true);
+      const timer = setTimeout(() => {
+        setIsNoticeVisible(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notice]);
+
+  useEffect(() => {
+    if (!isNoticeVisible && notice) {
+      const timer = setTimeout(() => {
+        setNotice(null);
+      }, 500); // 500ms transition duration
+      return () => clearTimeout(timer);
+    }
+  }, [isNoticeVisible, notice]);
+
   const handleProfileSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -223,7 +243,7 @@ export function TutorDashboard() {
     try {
       const { uploadAvatar } = await import('../../lib/storage');
       const newAvatarUrl = await uploadAvatar(file, user.id);
-      
+
       const savedProfile = await upsertMyTutorProfile({
         fullName: profileForm.fullName,
         subjectId: profileForm.subjectId,
@@ -234,7 +254,7 @@ export function TutorDashboard() {
       setProfile(savedProfile);
       setProfileForm(prev => ({ ...prev, imageUrl: newAvatarUrl }));
       setNotice('Foto profil tutor berhasil diperbarui.');
-      
+
       const { supabase } = await import('../../lib/supabase');
       await supabase.auth.updateUser({
         data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
@@ -329,9 +349,8 @@ export function TutorDashboard() {
                   key={item.label}
                   type="button"
                   onClick={() => setActiveView(item.view)}
-                  className={`flex min-w-max items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-semibold transition lg:w-full ${
-                    activeView === item.view ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-primary'
-                  }`}
+                  className={`flex min-w-max items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-semibold transition lg:w-full ${activeView === item.view ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-primary'
+                    }`}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
                   {item.label}
@@ -432,7 +451,44 @@ export function TutorDashboard() {
             </div>
           </header>
 
-          {notice && <div className="mb-5 rounded-xl border border-primary/20 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">{notice}</div>}
+          <div
+            className="fixed left-1/2 z-50 w-full max-w-md px-4 transition-all duration-500 ease-in-out"
+            style={{
+              transform: 'translateX(-50%)',
+              top: isNoticeVisible ? '24px' : '-120px',
+              opacity: isNoticeVisible ? 1 : 0,
+              pointerEvents: isNoticeVisible ? 'auto' : 'none',
+            }}
+          >
+            {notice && (
+              <div
+                className={`rounded-xl border bg-white px-5 py-4 text-sm font-semibold shadow-2xl flex items-center justify-between gap-3 border-l-4 ${
+                  notice.toLowerCase().includes('gagal') || notice.toLowerCase().includes('error')
+                    ? 'border-red-200 border-l-red-500 text-red-600'
+                    : 'border-primary/20 border-l-primary text-primary'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full animate-pulse shrink-0 ${
+                    notice.toLowerCase().includes('gagal') || notice.toLowerCase().includes('error') ? 'bg-red-500' : 'bg-primary'
+                  }`} />
+                  <span>{notice}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsNoticeVisible(false)}
+                  className={`transition-colors focus:outline-none ${
+                    notice.toLowerCase().includes('gagal') || notice.toLowerCase().includes('error')
+                      ? 'text-red-500/60 hover:text-red-700'
+                      : 'text-primary/60 hover:text-primary'
+                  }`}
+                  aria-label="Tutup"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-6">
             {activeView === 'dashboard' && (
@@ -793,7 +849,7 @@ function ProfileView({
   return (
     <section className="mx-auto max-w-3xl rounded-2xl border border-primary/10 bg-white p-6 shadow-md">
       <div className="mb-5 flex items-center gap-4">
-        <div 
+        <div
           className="group relative h-16 w-16 cursor-pointer overflow-hidden rounded-full border border-primary/20"
           onClick={() => fileInputRef.current?.click()}
         >
@@ -807,15 +863,15 @@ function ProfileView({
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
             <span className="text-[10px] font-bold text-white uppercase text-center">
               {isUploadingAvatar ? 'Menyimpan...' : (
-                <>Ubah<br/>Foto</>
+                <>Ubah<br />Foto</>
               )}
             </span>
           </div>
         </div>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
           accept="image/*"
           disabled={isUploadingAvatar}
           onChange={(e) => {
