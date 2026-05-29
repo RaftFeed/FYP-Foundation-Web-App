@@ -46,7 +46,7 @@ export function CoursesView({
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-extrabold tracking-normal text-foreground">Daftar Mata Kuliah</h2>
-        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} data</p>
+        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} Lobby</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -74,7 +74,7 @@ export function CoursesView({
                   className={`rounded-full px-3 py-1 text-xs font-bold ${hasMatchmaking ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                     }`}
                 >
-                  {subject.matchmaking_count} Matchmaking
+                  {subject.matchmaking_count} Lobby Grup
                 </span>
               </div>
 

@@ -1,34 +1,34 @@
-import { BookOpen, CalendarDays, FileBarChart, GraduationCap, Home, LogOut, RefreshCcw, Save, ShieldCheck, SquarePen, Trash2, Users, X } from 'lucide-react';
+import { BookOpen, CalendarDays, ChevronDown, FileBarChart, GraduationCap, Home, LogOut, RefreshCcw, Save, Settings, ShieldCheck, SquarePen, Trash2, UserRound, Users, X } from 'lucide-react';
+import logoUrl from '../../img/FYP_no_bg.png';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
+import { ProfileView } from './ui/student-dashboard/ProfileView';
+import { SettingsView } from './ui/student-dashboard/SettingsView';
 import {
-  Booking,
-  BookingStatus,
   Profile,
   Subject,
   TutorProfile,
   UserRole,
-  bookingStatusLabel,
   deleteSubject,
   deleteTutorProfile,
-  fetchAdminBookings,
   fetchProfiles,
   fetchSubjects,
   fetchTutorProfiles,
   formatCurrency,
   formatDate,
   formatTimeRange,
-  updateBookingStatus,
+  updateProfileDetails,
   updateProfileRole,
   upsertSubject,
   upsertTutorProfile,
 } from '../../lib/dashboardData';
-import { TutorAvailabilitySlot, fetchAdminTutorAvailability } from '../../lib/matchmakingData';
+import { supabase } from '../../lib/supabase';
+import { TutorAvailabilitySlot, MatchmakingLobby, fetchAdminTutorAvailability, fetchMatchmakingLobbies } from '../../lib/matchmakingData';
 import { Report, fetchReports } from '../../lib/paymentsReports';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 
-type AdminTab = 'dashboard' | 'sessions' | 'tutors' | 'subjects' | 'bookings' | 'users' | 'reports';
+type AdminTab = 'dashboard' | 'sessions' | 'tutors' | 'subjects' | 'bookings' | 'users' | 'reports' | 'profile' | 'settings';
 
 const navigation: Array<{ label: string; icon: typeof Home; view: AdminTab }> = [
   { label: 'Dashboard', icon: Home, view: 'dashboard' },
@@ -38,10 +38,26 @@ const navigation: Array<{ label: string; icon: typeof Home; view: AdminTab }> = 
   { label: 'Bookings', icon: SquarePen, view: 'bookings' },
   { label: 'Users', icon: Users, view: 'users' },
   { label: 'Reports', icon: FileBarChart, view: 'reports' },
+  { label: 'Profile', icon: UserRound, view: 'profile' },
+  { label: 'Settings', icon: Settings, view: 'settings' },
 ];
 
 const emptySubject = { name: '', code: '', description: '' };
 const emptyTutor = { full_name: '', subject_id: '', hourly_rate: 0, rating: 0, reviews_count: 0, image_url: '', bio: '' };
+
+function getDisplayName(email?: string) {
+  if (!email) {
+    return 'Admin';
+  }
+
+  return email
+    .split('@')[0]
+    .replace(/[._-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 export function AdminDashboard() {
   const { user, signOut } = useAuth();
@@ -50,7 +66,7 @@ export function AdminDashboard() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutors, setTutors] = useState<TutorProfile[]>([]);
   const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [lobbies, setLobbies] = useState<MatchmakingLobby[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +76,31 @@ export function AdminDashboard() {
   const [tutorForm, setTutorForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:tutor-form` : null, emptyTutor);
   const [editingTutorId, setEditingTutorId] = usePersistentState<string | null>(stateKeyPrefix ? `${stateKeyPrefix}:editing-tutor-id` : null, null);
   const [isAddingTutor, setIsAddingTutor] = useState(false);
+  const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ fullName: '' });
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadAdminData();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  const displayName = getDisplayName(user?.email);
+  const currentProfile = useMemo(() => profiles.find((profile) => profile.id === user?.id) ?? null, [profiles, user?.id]);
+  const avatarUrl = currentProfile?.image_url || user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+
+  useEffect(() => {
+    const nextName = currentProfile?.full_name?.trim() || displayName;
+
+    if (nextName && !profileForm.fullName) {
+      setProfileForm({ fullName: nextName });
+    }
+  }, [currentProfile?.full_name, displayName, profileForm.fullName]);
 
   const showNotice = (tone: NoticeModalState['tone'], message: string) => {
     setNotice({ tone, message });
@@ -72,7 +113,7 @@ export function AdminDashboard() {
           subjects: Subject[];
           tutors: TutorProfile[];
           slots: TutorAvailabilitySlot[];
-          bookings: Booking[];
+          lobbies: MatchmakingLobby[];
           profiles: Profile[];
           reports: Report[];
         }>(cacheKey)
@@ -82,7 +123,7 @@ export function AdminDashboard() {
       setSubjects(cachedData.subjects);
       setTutors(cachedData.tutors);
       setSlots(cachedData.slots);
-      setBookings(cachedData.bookings);
+      setLobbies(cachedData.lobbies);
       setProfiles(cachedData.profiles);
       setReports(cachedData.reports);
       setIsLoading(false);
@@ -91,18 +132,18 @@ export function AdminDashboard() {
     }
 
     try {
-      const [nextSubjects, nextTutors, nextSlots, nextBookings, nextProfiles, nextReports] = await Promise.all([
+      const [nextSubjects, nextTutors, nextSlots, nextLobbies, nextProfiles, nextReports] = await Promise.all([
         fetchSubjects(),
         fetchTutorProfiles(),
         fetchAdminTutorAvailability(),
-        fetchAdminBookings(),
+        fetchMatchmakingLobbies(),
         fetchProfiles(),
         fetchReports(),
       ]);
       setSubjects(nextSubjects);
       setTutors(nextTutors);
       setSlots(nextSlots);
-      setBookings(nextBookings);
+      setLobbies(nextLobbies);
       setProfiles(nextProfiles);
       setReports(nextReports);
       if (cacheKey) {
@@ -110,7 +151,7 @@ export function AdminDashboard() {
           subjects: nextSubjects,
           tutors: nextTutors,
           slots: nextSlots,
-          bookings: nextBookings,
+          lobbies: nextLobbies,
           profiles: nextProfiles,
           reports: nextReports,
         });
@@ -179,13 +220,70 @@ export function AdminDashboard() {
     }
   };
 
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+
+    setIsUploadingAvatar(true);
+    setNotice(null);
+    try {
+      const { uploadAvatar } = await import('../../lib/storage');
+      const { updateProfileDetails } = await import('../../lib/dashboardData');
+      const newAvatarUrl = await uploadAvatar(file, user.id);
+
+      await updateProfileDetails(user.id, { image_url: newAvatarUrl });
+
+      await supabase.auth.updateUser({
+        data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
+      });
+
+      showNotice('success', 'Foto profil berhasil diperbarui.');
+      await loadAdminData();
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui foto profil.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleProfileSave = async () => {
+    if (!user) {
+      return;
+    }
+
+    const trimmedName = profileForm.fullName.trim();
+    if (!trimmedName) {
+      showNotice('error', 'Tidak ada perubahan yang dilakukan.');
+      return;
+    }
+
+    setIsSavingName(true);
+    setNotice(null);
+    try {
+      await updateProfileDetails(user.id, {
+        full_name: trimmedName,
+      });
+
+      await loadAdminData();
+      showNotice('success', 'Profil berhasil diperbarui.');
+      setProfileForm({ fullName: '' });
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui profil.');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-secondary/40 text-foreground">
       <div className="grid min-h-screen lg:grid-cols-[248px_1fr]">
         <aside className="border-b border-primary/10 bg-white px-4 py-5 shadow-sm lg:border-b-0 lg:border-r">
           <div className="mb-7 flex items-center justify-between lg:block">
-            <div className="flex h-12 w-32 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-white shadow-sm">
-              FYP<span className="text-accent">&nbsp;Foundation</span>
+            <div className="flex h-14 items-center justify-start gap-1.5 rounded-lg bg-primary px-3.5 shadow-sm">
+              <img src={logoUrl} alt="Logo" className="h-12 w-12 object-contain shrink-0" />
+              <div className="flex flex-col gap-0 text-left font-extrabold leading-none">
+                <span className="leading-none text-lg text-white">FYP</span>
+                <span className="text-[12px] uppercase tracking-wide text-accent">Foundation</span>
+              </div>
             </div>
           </div>
 
@@ -216,25 +314,63 @@ export function AdminDashboard() {
               {navigation.find((item) => item.view === activeTab)?.label || 'Dashboard'}
             </h1>
             <div className="flex items-center gap-3">
-              <span className="hidden rounded-lg border border-primary/10 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm md:inline-flex">
-                {isLoading ? 'Loading database...' : 'Connected to Supabase'}
-              </span>
               <button
                 type="button"
-                onClick={() => void loadAdminData()}
+                onClick={() => void handleRefresh()}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/10 bg-white text-primary shadow-sm hover:bg-secondary"
                 aria-label="Refresh"
               >
-                <RefreshCcw className="h-4 w-4" />
+                <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="flex items-center gap-2 rounded-lg border border-primary/10 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm transition hover:bg-secondary"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+              <div className="relative flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsHeaderDropdownOpen(!isHeaderDropdownOpen)}
+                  className="flex items-center gap-2 text-sm font-semibold text-primary transition-all duration-200 hover:text-primary/70 active:scale-95 focus:outline-none"
+                >
+                  {displayName}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isHeaderDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <span className="inline-flex items-center rounded-full border border-primary/15 bg-secondary/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                  Admin
+                </span>
+
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="h-11 w-11 cursor-pointer rounded-full border border-primary/20 bg-white object-cover transition-all duration-200 hover:scale-105 hover:border-primary/50 active:scale-95"
+                    onClick={() => setIsHeaderDropdownOpen(!isHeaderDropdownOpen)}
+                  />
+                ) : (
+                  <div
+                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-primary/10 transition-all duration-200 hover:scale-105 hover:bg-primary/20 active:scale-95"
+                    onClick={() => setIsHeaderDropdownOpen(!isHeaderDropdownOpen)}
+                  >
+                    <UserRound className="h-7 w-7 text-primary" />
+                  </div>
+                )}
+
+                {isHeaderDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsHeaderDropdownOpen(false)} />
+                    <div className="absolute right-0 top-full z-50 mt-2 w-48 animate-in fade-in slide-in-from-top-2 rounded-xl border border-primary/10 bg-white p-2 shadow-lg duration-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHeaderDropdownOpen(false);
+                          void signOut();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Logout
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </header>
 
@@ -332,10 +468,7 @@ export function AdminDashboard() {
           )}
 
           {activeTab === 'bookings' && (
-            <BookingsPanel
-              bookings={bookings}
-              onStatusChange={(id, status) => runAdminAction(() => updateBookingStatus(id, status), 'Booking updated.')}
-            />
+            <LobbyBookingsPanel lobbies={lobbies} />
           )}
 
           {activeTab === 'users' && (
@@ -346,6 +479,19 @@ export function AdminDashboard() {
           )}
 
           {activeTab === 'reports' && <ReportsPanel reports={reports} />}
+          {activeTab === 'profile' && (
+            <ProfileView
+              profileForm={profileForm}
+              setProfileForm={setProfileForm}
+              onProfileSave={handleProfileSave}
+              onAvatarSelect={handleAvatarUpload}
+              isSaving={isSavingName}
+              isUploadingAvatar={isUploadingAvatar}
+              avatarUrl={avatarUrl}
+              profile={currentProfile}
+            />
+          )}
+          {activeTab === 'settings' && <SettingsView showNotice={showNotice} />}
         </main>
       </div>
 
@@ -523,46 +669,158 @@ function TutorEditModal({
   );
 }
 
+type AvailabilitySortKey = 'subject_name' | 'tutor_name' | 'starts_at' | 'location' | 'price_total' | 'max_participants' | 'status';
+
 function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
+  const [sortKey, setSortKey] = useState<AvailabilitySortKey>('starts_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const sortedSlots = useMemo(() => {
+    const compare = (left: TutorAvailabilitySlot, right: TutorAvailabilitySlot) => {
+      let result = 0;
+
+      switch (sortKey) {
+        case 'subject_name':
+          result = left.subject_name.localeCompare(right.subject_name);
+          break;
+        case 'tutor_name':
+          result = left.tutor_name.localeCompare(right.tutor_name);
+          break;
+        case 'starts_at':
+          result = new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime();
+          break;
+        case 'location':
+          result = left.location.localeCompare(right.location);
+          break;
+        case 'price_total':
+          result = left.price_total - right.price_total;
+          break;
+        case 'max_participants':
+          result = left.max_participants - right.max_participants;
+          break;
+        case 'status':
+          result = left.status.localeCompare(right.status);
+          break;
+      }
+
+      return sortDirection === 'asc' ? result : -result;
+    };
+
+    return [...slots].sort(compare);
+  }, [slots, sortDirection, sortKey]);
+
+  const toggleSort = (nextSortKey: AvailabilitySortKey) => {
+    if (nextSortKey === sortKey) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(nextSortKey);
+    setSortDirection('asc');
+  };
+
+  const sortIndicator = (nextSortKey: AvailabilitySortKey) => {
+    if (nextSortKey !== sortKey) {
+      return <ChevronDown className="h-3 w-3 opacity-30" />;
+    }
+
+    return <ChevronDown className={`h-3 w-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} />;
+  };
+
   return (
     <section className="mt-6">
-      <DataTable headers={['Subject', 'Tutor', 'Schedule', 'Location', 'Total Price', 'Capacity', 'Status']}>
-        {slots.map((slot) => (
-          <tr key={slot.id}>
-            <Cell strong>{slot.subject_name}</Cell>
-            <Cell>{slot.tutor_name}</Cell>
-            <Cell>{formatDate(slot.starts_at)} {formatTimeRange(slot.starts_at, slot.ends_at)}</Cell>
-            <Cell>{slot.location}</Cell>
-            <Cell>{formatCurrency(slot.price_total)}</Cell>
-            <Cell>{slot.max_participants} siswa</Cell>
-            <Cell>{slot.status}</Cell>
-          </tr>
-        ))}
-      </DataTable>
+      <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-muted text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('subject_name')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Subject {sortIndicator('subject_name')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('tutor_name')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Tutor {sortIndicator('tutor_name')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('starts_at')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Schedule {sortIndicator('starts_at')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('location')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Location {sortIndicator('location')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('price_total')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Total Price {sortIndicator('price_total')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('max_participants')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Capacity {sortIndicator('max_participants')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('status')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Status {sortIndicator('status')}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {sortedSlots.map((slot) => (
+                <tr key={slot.id}>
+                  <Cell strong>{slot.subject_name}</Cell>
+                  <Cell>{slot.tutor_name}</Cell>
+                  <Cell>{formatDate(slot.starts_at)} {formatTimeRange(slot.starts_at, slot.ends_at)}</Cell>
+                  <Cell>{slot.location}</Cell>
+                  <Cell>{formatCurrency(slot.price_total)}</Cell>
+                  <Cell>{slot.max_participants} siswa</Cell>
+                  <Cell>{slot.status}</Cell>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   );
 }
 
-function BookingsPanel({ bookings, onStatusChange }: { bookings: Booking[]; onStatusChange: (id: string, status: BookingStatus) => void }) {
+function LobbyBookingsPanel({ lobbies }: { lobbies: MatchmakingLobby[] }) {
+  const lobbyStatusLabels: Record<string, string> = {
+    open: 'Mencari Anggota',
+    pending_payment: 'Menunggu Pembayaran',
+    paid: 'Kelas Aktif',
+    expired: 'Kadaluarsa',
+    cancelled: 'Dibatalkan',
+    completed: 'Selesai',
+  };
+
   return (
     <section className="mt-6">
-      <DataTable headers={['Student', 'Session', 'Total', 'Status']}>
-        {bookings.map((booking) => (
-          <tr key={booking.id}>
-            <Cell strong>{booking.student?.full_name ?? booking.student?.email ?? booking.student_id}</Cell>
-            <Cell>{booking.session?.title ?? booking.session_id}</Cell>
-            <Cell>{formatCurrency(booking.total_price)}</Cell>
+      <DataTable headers={['Lobby', 'Subject', 'Tutor', 'Members', 'Price/Person', 'Status']}>
+        {lobbies.map((lobby) => (
+          <tr key={lobby.id}>
+            <Cell strong>{lobby.title}</Cell>
+            <Cell>{lobby.subject_name}</Cell>
+            <Cell>{lobby.tutor_name}</Cell>
+            <Cell>{lobby.member_count ?? 0}/{lobby.max_participants}</Cell>
+            <Cell>{formatCurrency(lobby.price_per_member)}</Cell>
             <td className="px-4 py-4">
-              <select
-                value={booking.status}
-                onChange={(event) => onStatusChange(booking.id, event.target.value as BookingStatus)}
-                className="h-9 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary"
-              >
-                <option value="pending_payment">{bookingStatusLabel('pending_payment')}</option>
-                <option value="upcoming">{bookingStatusLabel('upcoming')}</option>
-                <option value="completed">{bookingStatusLabel('completed')}</option>
-                <option value="cancelled">{bookingStatusLabel('cancelled')}</option>
-              </select>
+              <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
+                lobby.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
+                lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
+                lobby.status === 'open' ? 'bg-blue-100 text-blue-700' :
+                'bg-secondary text-primary'
+              }`}>
+                {lobbyStatusLabels[lobby.status] ?? lobby.status}
+              </span>
             </td>
           </tr>
         ))}

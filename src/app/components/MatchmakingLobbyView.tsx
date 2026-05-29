@@ -363,6 +363,35 @@ export function MatchmakingLobbyView({
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-sm">
+            {isLoading && (
+              <div className="divide-y divide-primary/5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-muted" />
+                          <div className="space-y-1.5">
+                            <div className="h-4 w-32 rounded bg-muted" />
+                            <div className="h-3 w-20 rounded bg-muted" />
+                          </div>
+                        </div>
+                        <div className="h-5 w-48 rounded bg-muted" />
+                        <div className="flex gap-4">
+                          <div className="h-3 w-28 rounded bg-muted" />
+                          <div className="h-3 w-24 rounded bg-muted" />
+                          <div className="h-3 w-16 rounded bg-muted" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 lg:w-36">
+                        <div className="h-5 w-24 rounded bg-muted" />
+                        <div className="h-8 w-28 rounded-lg bg-muted" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {!isLoading && filteredLobbies.length === 0 && (
               <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada lobby public yang bisa kamu ikuti sekarang.</div>
             )}
@@ -596,6 +625,11 @@ function LobbyCard({
       <div className="flex flex-col justify-between gap-3 border-t border-primary/10 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
         <div>
           <p className="text-sm font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
+          <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+            {lobby.price_per_member !== lobby.price_if_full && (
+              <><span className="text-green-600">{formatCurrency(lobby.price_if_full)}</span> jika penuh</>
+            )}
+          </p>
           <p className="mt-1 text-xs font-medium text-muted-foreground">Kode Kelas</p>
           <button
             type="button"

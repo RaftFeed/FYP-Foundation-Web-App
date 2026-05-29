@@ -1,36 +1,36 @@
 import { ArrowUpRight } from 'lucide-react';
-import { Booking, formatCurrency } from '../../../../lib/dashboardData';
-import { TutorAvailabilitySlot } from '../../../../lib/matchmakingData';
-import { BookingRow } from './BookingsView';
-import { StudentView } from '../../StudentDashboard'; // Wait, I'll export it from StudentDashboard
+import { formatCurrency } from '../../../../lib/dashboardData';
+import { MatchmakingLobby, TutorAvailabilitySlot } from '../../../../lib/matchmakingData';
+import { JoinedLobbyRow } from './BookingsView';
+import { StudentView } from '../../StudentDashboard';
 
 export function DashboardView({
-  bookings,
+  joinedLobbies,
   displayName,
   availableTutorSlots,
   setActiveView,
 }: {
-  bookings: Booking[];
+  joinedLobbies: MatchmakingLobby[];
   displayName: string;
   availableTutorSlots: TutorAvailabilitySlot[];
   setActiveView: (view: StudentView) => void;
 }) {
-  const activeBookings = bookings.filter((booking) => booking.status === 'upcoming' || booking.status === 'pending_payment');
-  const completedBookings = bookings.filter((booking) => booking.status === 'completed');
-  const pendingPayment = bookings.filter((booking) => booking.status === 'pending_payment');
-  const totalSpend = bookings
-    .filter((booking) => booking.status !== 'cancelled')
-    .reduce((sum, booking) => sum + booking.total_price, 0);
+  const activeLobbies = joinedLobbies.filter((lobby) => lobby.status === 'open' || lobby.status === 'paid');
+  const completedLobbies = joinedLobbies.filter((lobby) => lobby.status === 'completed');
+  const pendingPayment = joinedLobbies.filter((lobby) => lobby.status === 'pending_payment');
+  const totalSpend = joinedLobbies
+    .filter((lobby) => lobby.status !== 'cancelled' && lobby.status !== 'expired')
+    .reduce((sum, lobby) => sum + lobby.price_per_member, 0);
 
   const stats = [
-    { label: 'Kelas Aktif', value: String(activeBookings.length), view: 'bookings' as StudentView },
+    { label: 'Kelas Aktif', value: String(activeLobbies.length), view: 'bookings' as StudentView },
     { label: 'Menunggu Pembayaran', value: String(pendingPayment.length), view: 'bookings' as StudentView },
-    { label: 'Kelas Selesai', value: String(completedBookings.length), view: 'bookings' as StudentView },
+    { label: 'Kelas Selesai', value: String(completedLobbies.length), view: 'bookings' as StudentView },
     { label: 'Total Pengeluaran', value: formatCurrency(totalSpend), view: 'bookings' as StudentView, wide: true },
   ];
 
-  const upcoming = bookings
-    .filter((booking) => booking.status === 'upcoming' || booking.status === 'pending_payment')
+  const upcoming = joinedLobbies
+    .filter((lobby) => lobby.status === 'open' || lobby.status === 'paid' || lobby.status === 'pending_payment')
     .slice(0, 3);
 
   return (
@@ -65,7 +65,14 @@ export function DashboardView({
 
         <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
           {upcoming.length > 0 ? (
-            upcoming.map((booking) => <BookingRow key={booking.id} booking={booking} />)
+            upcoming.map((lobby) => (
+              <JoinedLobbyRow
+                key={lobby.id}
+                lobby={lobby}
+                onLeave={() => {}}
+                onShowDetail={() => {}}
+              />
+            ))
           ) : (
             <div className="p-6 text-sm font-medium text-muted-foreground">
               Belum ada booking mendatang. Ada {availableTutorSlots.length} slot tutor tersedia untuk kamu.

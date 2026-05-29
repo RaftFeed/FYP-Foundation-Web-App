@@ -9,18 +9,6 @@ CREATE TABLE public.admin_profiles (
   CONSTRAINT admin_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT admin_profiles_id_fkey FOREIGN KEY (id) REFERENCES public.profiles(id)
 );
-CREATE TABLE public.bookings (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  session_id uuid NOT NULL,
-  student_id uuid NOT NULL,
-  status USER-DEFINED NOT NULL DEFAULT 'pending_payment'::booking_status,
-  total_price integer NOT NULL CHECK (total_price >= 0),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  net_income integer DEFAULT 0 CHECK (net_income >= 0),
-  CONSTRAINT bookings_pkey PRIMARY KEY (id),
-  CONSTRAINT bookings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
-);
 CREATE TABLE public.matchmaking_lobbies (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   code text NOT NULL UNIQUE,
@@ -40,7 +28,9 @@ CREATE TABLE public.matchmaking_lobbies (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   net_income integer DEFAULT 0 CHECK (net_income >= 0),
+  tutor_user_id uuid,
   CONSTRAINT matchmaking_lobbies_pkey PRIMARY KEY (id),
+  CONSTRAINT matchmaking_lobbies_tutor_user_id_fkey FOREIGN KEY (tutor_user_id) REFERENCES public.profiles(id),
   CONSTRAINT matchmaking_lobbies_creator_id_fkey FOREIGN KEY (creator_id) REFERENCES public.profiles(id),
   CONSTRAINT matchmaking_lobbies_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
   CONSTRAINT matchmaking_lobbies_availability_slot_id_fkey FOREIGN KEY (availability_slot_id) REFERENCES public.tutor_availability_slots(id),

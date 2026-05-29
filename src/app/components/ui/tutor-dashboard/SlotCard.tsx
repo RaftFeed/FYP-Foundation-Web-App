@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { CalendarDays, Clock3, MapPin, Trash2, UserRound, Users, X } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 import { formatCurrency, formatDate, formatTimeRange } from '../../../../lib/dashboardData';
-import { TutorAvailabilitySlot, MatchmakingLobby, fetchSlotStudents, fetchLobbyForSlot, SlotStudent } from '../../../../lib/matchmakingData';
+import { TutorAvailabilitySlot, MatchmakingLobby, fetchSlotStudents, fetchLobbyForSlot, fetchLobbyStudents, fetchLobbyMemberCount, fetchProfileDisplayName, kickMatchmakingLobbyMember, SlotStudent } from '../../../../lib/matchmakingData';
 
 const slotStatusLabels: Record<TutorAvailabilitySlot['status'], string> = {
   available: 'Tersedia',
-  held: 'Di-hold Lobby',
+  held: 'Lobby Terbuat',
   booked: 'Terbooking',
   cancelled: 'Dibatalkan',
 };
@@ -129,27 +130,69 @@ export function LobbyDetailModal({
   lobby: MatchmakingLobby;
   onClose: () => void;
 }) {
-  const isMemberOrCreator = lobby.current_user_is_member || lobby.current_user_is_creator;
-  const [students, setStudents] = useState<SlotStudent[] | null>(isMemberOrCreator ? null : []);
+  const { user } = useAuth();
+  const [students, setStudents] = useState<SlotStudent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(isMemberOrCreator);
+  const [loading, setLoading] = useState(true);
+  const [creatorDisplayName, setCreatorDisplayName] = useState<string | null>(lobby.creator_name);
+  const [liveMemberCount, setLiveMemberCount] = useState<number>(lobby.member_count ?? 0);
+  const [kickError, setKickError] = useState<string | null>(null);
+  const [kickingStudentId, setKickingStudentId] = useState<string | null>(null);
+  const [pendingKickStudent, setPendingKickStudent] = useState<SlotStudent | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const currentUserId = user?.id ?? null;
 
   useEffect(() => {
-    if (!isMemberOrCreator) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchSlotStudents(lobby.availability_slot_id)
-      .then((data) => { if (!cancelled) setStudents(data); })
-      .catch((err: Error) => { if (!cancelled) setError(err.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [isMemberOrCreator, lobby.availability_slot_id]);
+    setKickError(null);
+    setCreatorDisplayName(lobby.creator_name);
+    void fetchProfileDisplayName(lobby.creator_id).then((name) => {
+      if (!cancelled && name) {
+        setCreatorDisplayName(name);
+      }
+    });
+    void fetchLobbyMemberCount(lobby.id).then((count) => {
+      if (!cancelled) {
+        setLiveMemberCount(count);
+      }
+    });
+    fetchLobbyStudents(lobby.id, lobby.tutor_user_id)
+      .then((data) => {
+        if (!cancelled) setStudents(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lobby.id, lobby.tutor_user_id, lobby.creator_id, lobby.creator_name, refreshKey]);
+
+  const handleKickStudent = async (studentId: string) => {
+    setKickingStudentId(studentId);
+    setKickError(null);
+    try {
+      await kickMatchmakingLobbyMember(lobby.id, studentId);
+      setRefreshKey((value) => value + 1);
+    } catch (kickErr) {
+      setKickError(kickErr instanceof Error ? kickErr.message : 'Gagal mengeluarkan anggota dari lobby.');
+    } finally {
+      setKickingStudentId(null);
+      setPendingKickStudent(null);
+    }
+  };
+
+  const memberCount = liveMemberCount || students?.length || 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl border border-primary/10 bg-white p-5 shadow-xl max-h-[80vh] flex flex-col"
+        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-primary/10 bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -163,7 +206,7 @@ export function LobbyDetailModal({
               <span>·</span>
               <span>{formatTimeRange(lobby.starts_at, lobby.ends_at)}</span>
               <span>·</span>
-              <span>{lobby.member_count ?? 0}/{lobby.max_participants} siswa</span>
+              <span>{memberCount}/{lobby.max_participants} siswa</span>
             </div>
           </div>
           <button
@@ -176,54 +219,95 @@ export function LobbyDetailModal({
           </button>
         </div>
 
-        <div className="rounded-lg border border-primary/10 bg-secondary/30 px-4 py-3 mb-4 text-sm">
-          <p className="font-semibold text-foreground">Dibuat oleh</p>
-          <p className="text-muted-foreground">{lobby.creator_name ?? 'Tidak diketahui'}</p>
-        </div>
 
-        {!isMemberOrCreator && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
-            <p className="font-semibold mb-1">Kamu belum bergabung di lobby ini</p>
-            <p className="text-amber-700">Gabung lobby untuk melihat daftar semua siswa yang mengikuti.</p>
+        <div className="flex-1 overflow-y-auto pr-1">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-primary/10 bg-primary/5 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pembuat Lobby</p>
+              <p className="mt-1 truncate text-sm font-semibold text-foreground">{creatorDisplayName ?? `User ${lobby.creator_id.slice(0, 8)}`}</p>
+            </div>
+            <div className="rounded-lg border border-primary/10 bg-secondary/40 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Siswa Bergabung</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{memberCount} / {lobby.max_participants}</p>
+            </div>
           </div>
-        )}
 
-        {isMemberOrCreator && (
-          <div className="flex-1 overflow-y-auto pr-1">
-            <p className="mb-2 text-sm font-semibold text-foreground">Daftar Siswa</p>
-            {loading && (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
-                ))}
+          <p className="mb-2 text-sm font-semibold text-foreground">Tutor</p>
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/10 bg-primary/5 px-4 py-3">
+            {lobby.tutor_image_url ? (
+              <img
+                src={lobby.tutor_image_url}
+                alt={lobby.tutor_name}
+                className="h-9 w-9 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                {lobby.tutor_name.charAt(0).toUpperCase()}
               </div>
             )}
-            {!loading && error && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
-                <p className="font-semibold mb-1">Tidak dapat memuat daftar siswa</p>
-                <p className="text-amber-700">{error}</p>
-              </div>
-            )}
-            {!loading && students && students.length === 0 && (
-              <div className="py-8 text-center text-sm font-medium text-muted-foreground">
-                Belum ada siswa yang bergabung.
-              </div>
-            )}
-            {!loading && students && students.length > 0 && (
-              <div className="space-y-2">
-                {students.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-primary/10 bg-secondary/30 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{s.student_email}</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">{lobby.tutor_name}</p>
+              <p className="text-xs font-medium text-primary">Tutor</p>
+            </div>
+          </div>
+
+          <p className="mb-2 text-sm font-semibold text-foreground">Daftar Siswa</p>
+          {loading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          )}
+          {!loading && error && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+              <p className="font-semibold mb-1">Tidak dapat memuat daftar siswa</p>
+              <p className="text-amber-700">{error}</p>
+            </div>
+          )}
+          {!loading && students && students.length === 0 && (
+            <div className="py-8 text-center text-sm font-medium text-muted-foreground">
+              Belum ada siswa yang bergabung.
+            </div>
+          )}
+          {!loading && students && students.length > 0 && (
+            <div className="space-y-2">
+              {kickError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {kickError}
+                </div>
+              )}
+              {students.map((s) => (
+                <div key={s.student_id} className="flex items-center gap-3 rounded-lg border border-primary/10 bg-secondary/30 px-4 py-3">
+                  {s.student_image_url ? (
+                    <img src={s.student_image_url} alt={s.student_name} className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                      {s.student_name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{s.status}</span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{s.student_email}</p>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  {lobby.current_user_is_creator && s.student_id !== currentUserId && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingKickStudent(s)}
+                      disabled={kickingStudentId === s.student_id}
+                      className="shrink-0 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Kick
+                    </button>
+                  )}
+                  <div className="shrink-0 text-right">
+                    <p className="mt-1 text-[10px] font-medium text-muted-foreground">Gabung {new Date(s.joined_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-4 flex justify-end">
           <button
@@ -235,6 +319,47 @@ export function LobbyDetailModal({
           </button>
         </div>
       </div>
+      {pendingKickStudent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/35 p-4" onClick={() => setPendingKickStudent(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-primary/10 bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-extrabold text-foreground">Keluarkan anggota?</h3>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              {pendingKickStudent.student_name} akan dikeluarkan dari lobby. Aksi ini akan menandai status ke <span className="font-semibold text-foreground">left</span> dan menghapusnya dari roster aktif.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingKickStudent(null)}
+                className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition"
+                disabled={kickingStudentId !== null}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleKickStudent(pendingKickStudent.student_id)}
+                disabled={kickingStudentId === pendingKickStudent.student_id}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {kickingStudentId === pendingKickStudent.student_id ? 'Memproses...' : 'Ya, keluarkan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderStudentAvatar(student: SlotStudent) {
+  if (student.student_image_url) {
+    return <img src={student.student_image_url} alt={student.student_name} className="h-9 w-9 shrink-0 rounded-full object-cover" />;
+  }
+
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+      {student.student_name.charAt(0).toUpperCase()}
     </div>
   );
 }
@@ -317,14 +442,12 @@ export function StudentListModal({
 
           {!loading && students && students.length > 0 && (
             <div className="space-y-2">
-              {students.map((s, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-primary/10 bg-secondary/30 px-4 py-3">
-                  <div className="min-w-0">
+              {students.map((s) => (
+                <div key={s.student_id} className="flex items-center gap-3 rounded-lg border border-primary/10 bg-secondary/30 px-4 py-3">
+                  {renderStudentAvatar(s)}
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
                     <p className="truncate text-xs text-muted-foreground">{s.student_email}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{s.status}</span>
                   </div>
                 </div>
               ))}

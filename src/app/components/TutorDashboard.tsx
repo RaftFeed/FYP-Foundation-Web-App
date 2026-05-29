@@ -1,4 +1,5 @@
 import { ArrowUpRight, BookOpen, CalendarDays, ChevronDown, Home, LogOut, RefreshCcw, Save, Settings, Trash2, UserRound, X } from 'lucide-react';
+import logoUrl from '../../img/FYP_no_bg.png';
 import { FormEvent, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Chart as ChartJS,
@@ -92,6 +93,16 @@ export function TutorDashboard() {
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [isNoticeVisible, setIsNoticeVisible] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([loadTutorData(), loadSlots()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const monthRange = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
   const slotRepeatMode = slotForm.repeatMode === 'weekly' || Boolean((slotForm as typeof emptySlotForm & { repeatWeekly?: boolean }).repeatWeekly) ? 'weekly' : 'once';
@@ -321,8 +332,12 @@ export function TutorDashboard() {
       <div className="grid min-h-screen lg:grid-cols-[248px_1fr]">
         <aside className="border-b border-primary/10 bg-white px-4 py-5 shadow-sm lg:border-b-0 lg:border-r">
           <div className="mb-7 flex items-center justify-between lg:block">
-            <div className="flex h-12 w-32 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-white shadow-sm">
-              FYP<span className="text-accent">&nbsp;Foundation</span>
+            <div className="flex h-14 items-center justify-start gap-2.5 rounded-lg bg-primary px-3.5 shadow-sm">
+              <img src={logoUrl} alt="Logo" className="h-9 w-9 object-contain shrink-0" />
+              <div className="flex flex-col text-left font-extrabold leading-none gap-0.5">
+                <span className="text-white text-base">FYP</span>
+                <span className="text-accent text-[11px] uppercase tracking-wider">Foundation</span>
+              </div>
             </div>
             <button
               type="button"
@@ -362,14 +377,11 @@ export function TutorDashboard() {
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={() => {
-                  void loadTutorData();
-                  void loadSlots();
-                }}
+                onClick={() => void handleRefresh()}
                 className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-primary/10 bg-white text-primary shadow-sm hover:bg-secondary"
                 aria-label="Refresh"
               >
-                <RefreshCcw className="h-5 w-5" />
+                <RefreshCcw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
 
               <div className="relative flex items-center gap-3">
