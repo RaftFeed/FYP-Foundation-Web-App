@@ -284,7 +284,7 @@ export function StudentDashboard() {
                 aria-label="Notifications"
               >
                 <Bell className="h-6 w-6" />
-                {joinedLobbies.some((lobby) => lobby.status === 'pending_payment') && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />}
+                {joinedLobbies.some((lobby) => lobby.status === 'pending_payment' && !lobby.current_user_has_paid) && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />}
               </button>
 
               <div className="relative flex items-center gap-3">
@@ -379,6 +379,7 @@ export function StudentDashboard() {
               onPayError={(errorMsg: string) => {
                 showNotice('error', errorMsg);
               }}
+              onRefresh={loadDashboard}
               stateKeyPrefix={stateKeyPrefix}
             />
           )}

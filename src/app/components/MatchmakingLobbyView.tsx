@@ -1,4 +1,4 @@
-import { Banknote, CalendarDays, Clock3, Copy, Lock, Search, Users } from 'lucide-react';
+import { Banknote, CalendarDays, Clock3, Copy, Lock, Search, Timer, Users } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
@@ -24,6 +24,50 @@ const statusLabels: Record<MatchmakingLobby['status'], string> = {
   cancelled: 'Dibatalkan',
   completed: 'Selesai',
 };
+
+function LobbyCountdown({ expiresAt }: { expiresAt: string }) {
+  const computeRemaining = useCallback(() => {
+    return Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  }, [expiresAt]);
+
+  const [remaining, setRemaining] = useState(computeRemaining);
+
+  useEffect(() => {
+    setRemaining(computeRemaining());
+    const interval = window.setInterval(() => {
+      setRemaining(computeRemaining());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [computeRemaining]);
+
+  if (remaining <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600">
+        <Timer className="h-3.5 w-3.5" />
+        Waktu habis
+      </span>
+    );
+  }
+
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  const isUrgent = remaining < 3600;
+  const label = hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums ${
+        isUrgent ? 'text-red-600 animate-pulse' : 'text-amber-600'
+      }`}
+    >
+      <Timer className="h-3.5 w-3.5" />
+      {label}
+    </span>
+  );
+}
 
 const initialForm = {
   availabilitySlotId: '',
@@ -617,6 +661,9 @@ function LobbyCard({
             <Users className="h-4 w-4 text-primary" />
             {memberCountLabel}
           </span>
+          {lobby.status === 'open' && (
+            <LobbyCountdown expiresAt={lobby.expires_at} />
+          )}
         </div>
 
         {lobby.description && <p className="mt-4 rounded-xl bg-secondary p-3 text-sm font-medium text-muted-foreground">{lobby.description}</p>}

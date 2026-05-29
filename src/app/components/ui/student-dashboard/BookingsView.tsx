@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
-import { Banknote, CircleCheck, Clock3, NotebookTabs, Users } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Banknote, CircleCheck, Clock3, NotebookTabs, Timer, Users } from 'lucide-react';
 import { usePersistentState } from '../../../../lib/browserState';
 import {
   formatCurrency,
   formatDate,
   formatTimeRange,
 } from '../../../../lib/dashboardData';
-import { MatchmakingLobby, MatchmakingLobbyStatus, payLobbyShare } from '../../../../lib/matchmakingData';
+import { MatchmakingLobby, MatchmakingLobbyStatus, payLobbyShare, forceLobbyToPendingPayment } from '../../../../lib/matchmakingData';
 import { LobbyDetailModal } from '../tutor-dashboard/SlotCard';
 
 type BookingTab = 'Semua' | 'Mendatang' | 'Selesai' | 'Dibatalkan' | 'Menunggu Pembayaran';
@@ -28,17 +28,65 @@ const lobbyStatusLabels: Record<MatchmakingLobbyStatus, string> = {
   completed: 'Selesai',
 };
 
+function CountdownTimer({ expiresAt }: { expiresAt: string }) {
+  const computeRemaining = useCallback(() => {
+    return Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  }, [expiresAt]);
+
+  const [remaining, setRemaining] = useState(computeRemaining);
+
+  useEffect(() => {
+    setRemaining(computeRemaining());
+    const interval = window.setInterval(() => {
+      setRemaining(computeRemaining());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [computeRemaining]);
+
+  if (remaining <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+        <Timer className="h-3 w-3" />
+        Waktu habis
+      </span>
+    );
+  }
+
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  const isUrgent = remaining < 3600;
+  const label = hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums ${
+        isUrgent
+          ? 'bg-red-100 text-red-700 animate-pulse'
+          : 'bg-amber-100 text-amber-700'
+      }`}
+    >
+      <Timer className="h-3 w-3" />
+      {label}
+    </span>
+  );
+}
+
 export function BookingsView({
   joinedLobbies,
   onLeaveLobby,
   onPaySuccess,
   onPayError,
+  onRefresh,
   stateKeyPrefix,
 }: {
   joinedLobbies: MatchmakingLobby[];
   onLeaveLobby: (lobbyId: string) => void;
   onPaySuccess: () => void;
   onPayError: (error: string) => void;
+  onRefresh?: () => void;
   stateKeyPrefix: string | null;
 }) {
   const [activeLobbyDetail, setActiveLobbyDetail] = useState<MatchmakingLobby | null>(null);
@@ -67,6 +115,17 @@ export function BookingsView({
     }
   };
 
+  const handleForceLock = async (lobbyId: string) => {
+    try {
+      await forceLobbyToPendingPayment(lobbyId);
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (error) {
+      onPayError(error instanceof Error ? error.message : 'Gagal mensimulasikan lobby penuh.');
+    }
+  };
+
   return (
     <section>
       <div className="mb-6">
@@ -83,9 +142,9 @@ export function BookingsView({
               }`}
           >
             {tab}
-            {tab === 'Menunggu Pembayaran' && joinedLobbies.filter((l) => l.status === 'pending_payment').length > 0 && (
+            {tab === 'Menunggu Pembayaran' && joinedLobbies.filter((l) => l.status === 'pending_payment' && !l.current_user_has_paid).length > 0 && (
               <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
-                {joinedLobbies.filter((l) => l.status === 'pending_payment').length}
+                {joinedLobbies.filter((l) => l.status === 'pending_payment' && !l.current_user_has_paid).length}
               </span>
             )}
           </button>
@@ -109,6 +168,7 @@ export function BookingsView({
               onLeave={onLeaveLobby}
               onShowDetail={() => setActiveLobbyDetail(lobby)}
               onPay={() => setPaymentModalLobby(lobby)}
+              onForceLock={handleForceLock}
             />
           ))}
         </div>
@@ -159,9 +219,12 @@ export function BookingsView({
               </div>
             </div>
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-5 text-sm">
-              <p className="font-semibold text-amber-800 mb-1">💡 Mode Simulasi</p>
-              <p className="text-amber-700">Klik tombol di bawah untuk mensimulasikan pembayaran yang berhasil. Anggota yang tidak membayar akan otomatis dikeluarkan.</p>
+            <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 mb-5">
+              <div className="text-sm">
+                <p className="font-semibold text-amber-800 mb-1">⏳ Batas Waktu Pembayaran</p>
+                <p className="text-amber-700">Segera selesaikan pembayaran sebelum waktu habis.</p>
+              </div>
+              <CountdownTimer expiresAt={paymentModalLobby.expires_at} />
             </div>
 
             <div className="flex gap-3 justify-end">
@@ -208,20 +271,22 @@ export function JoinedLobbyRow({
   onLeave,
   onShowDetail,
   onPay,
+  onForceLock,
 }: {
   lobby: MatchmakingLobby;
   onLeave: (lobbyId: string) => void;
   onShowDetail: () => void;
   onPay?: () => void;
+  onForceLock?: (lobbyId: string) => void;
 }) {
   const memberCount = lobby.member_count ?? 0;
   const canLeave = lobby.status !== 'completed' && lobby.status !== 'cancelled' && lobby.status !== 'expired';
-  const canPay = lobby.status === 'pending_payment';
+  const canPay = lobby.status === 'pending_payment' && !lobby.current_user_has_paid;
 
   return (
     <article className="grid gap-4 border-b border-primary/10 p-4 last:border-b-0 lg:grid-cols-[92px_1fr_220px] lg:items-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-primary/10 bg-secondary text-primary">
-        {lobby.status === 'paid' || lobby.status === 'completed' ? (
+        {lobby.status === 'paid' || lobby.status === 'completed' || (lobby.status === 'pending_payment' && lobby.current_user_has_paid) ? (
           <CircleCheck className="h-8 w-8 text-green-600" />
         ) : lobby.status === 'pending_payment' ? (
           <Banknote className="h-8 w-8 text-amber-600" />
@@ -235,11 +300,21 @@ export function JoinedLobbyRow({
           {lobby.subject_name} bersama {lobby.tutor_name}
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
-          <span className={`rounded-full px-3 py-1 ${lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
-              lobby.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
-                lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
-                  'bg-secondary text-primary'
-            }`}>{lobbyStatusLabels[lobby.status]}</span>
+          <span className={`rounded-full px-3 py-1 ${
+            lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
+            lobby.status === 'pending_payment' ? (
+              lobby.current_user_has_paid ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+            ) :
+            lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
+            'bg-secondary text-primary'
+          }`}>
+            {lobby.status === 'pending_payment' && lobby.current_user_has_paid
+              ? 'Sudah Bayar (Menunggu Anggota Lain)'
+              : lobbyStatusLabels[lobby.status]}
+          </span>
+          {(lobby.status === 'open' || lobby.status === 'pending_payment') && (
+            <CountdownTimer expiresAt={lobby.expires_at} />
+          )}
           <span>{formatDate(lobby.starts_at)}</span>
           <span>{formatTimeRange(lobby.starts_at, lobby.ends_at)}</span>
           <span>{memberCount}/{lobby.max_participants} siswa</span>
@@ -257,6 +332,15 @@ export function JoinedLobbyRow({
           >
             Lihat Detail
           </button>
+          {lobby.status === 'open' && onForceLock && (
+            <button
+              type="button"
+              onClick={() => onForceLock(lobby.id)}
+              className="h-10 rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 hover:border-amber-300"
+            >
+              Simulasikan Penuh
+            </button>
+          )}
           {canPay && onPay && (
             <button
               type="button"

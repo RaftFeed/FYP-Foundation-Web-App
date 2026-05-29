@@ -39,6 +39,7 @@ export interface SlotStudent {
   student_image_url: string | null;
   status: string;
   joined_at: string;
+  payment_status?: 'pending' | 'paid' | 'failed' | null;
 }
 
 async function resolveProfileDisplayNames(profileIds: string[]): Promise<Map<string, string>> {
@@ -95,6 +96,24 @@ async function fetchLobbyMembers(lobbyIds: string[], tutorUserIds: string[] = []
     .map((m) => m.student_id);
   const displayNames = await resolveProfileDisplayNames(studentIds);
 
+  // Fetch payments for these lobbies and students
+  let payments: Array<{ lobby_id: string; student_id: string; status: string }> = [];
+  if (studentIds.length > 0) {
+    const { data: paymentsData } = await supabase
+      .from('matchmaking_lobby_payments')
+      .select('lobby_id, student_id, status')
+      .in('lobby_id', lobbyIds)
+      .in('student_id', studentIds);
+    if (paymentsData) {
+      payments = paymentsData;
+    }
+  }
+
+  const paymentStatuses = new Map<string, string>();
+  for (const p of payments) {
+    paymentStatuses.set(`${p.lobby_id}:${p.student_id}`, p.status);
+  }
+
   return (data ?? [])
     .filter((m) => !excludedStudentIds.has(m.student_id))
     .map((m) => ({
@@ -104,6 +123,7 @@ async function fetchLobbyMembers(lobbyIds: string[], tutorUserIds: string[] = []
       student_image_url: (m.student as any)?.image_url ?? null,
       status: m.status,
       joined_at: m.joined_at,
+      payment_status: (paymentStatuses.get(`${m.lobby_id}:${m.student_id}`) as any) ?? null,
     }));
 }
 
@@ -194,6 +214,7 @@ export interface MatchmakingLobby {
   expires_at: string;
   current_user_is_member: boolean;
   current_user_is_creator: boolean;
+  current_user_has_paid?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -213,12 +234,6 @@ function throwIfError(error: { message: string } | null) {
   if (error) {
     throw new Error(error.message);
   }
-}
-
-function getTodayStartIso() {
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  return startOfToday.toISOString();
 }
 
 function isMissingMatchmakingPaymentDependency(error: { code?: string; message?: string } | null) {
@@ -281,7 +296,7 @@ export async function fetchAvailableTutorSlots() {
     `)
     .eq('status', 'available')
     .eq('tutor.status', 'approved')
-    .gte('starts_at', getTodayStartIso())
+    .gte('starts_at', new Date().toISOString())
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
@@ -406,7 +421,7 @@ export async function fetchStudentTutorScheduleSlots() {
     `)
     .in('status', ['available', 'held', 'booked'])
     .eq('tutor.status', 'approved')
-    .gte('starts_at', getTodayStartIso())
+    .gte('starts_at', new Date().toISOString())
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
@@ -514,7 +529,7 @@ export async function fetchLobbyForSlot(slotId: string): Promise<MatchmakingLobb
     max_participants: lobby.max_participants,
     price_total: Number(lobby.price_total ?? 0),
     price_per_member: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max(memberCount, 1),
+      Number(lobby.price_total ?? 0) / Math.max(memberCount + 1, 1),
     ),
     price_if_full: Math.ceil(
       Number(lobby.price_total ?? 0) / Math.max(lobby.max_participants, 1),
@@ -538,6 +553,7 @@ export async function fetchMatchmakingLobbies() {
   const [
     { data: lobbies, error: lobbiesError },
     { data: memberships, error: membershipsError },
+    { data: userPayments, error: userPaymentsError },
   ] = await Promise.all([
     supabase
       .from('matchmaking_lobbies')
@@ -569,15 +585,27 @@ export async function fetchMatchmakingLobbies() {
       .from('matchmaking_lobby_members')
       .select('lobby_id, student_id, status, student:profiles!student_id(role)')
       .eq('status', 'active'),
+    currentUserId
+      ? supabase
+          .from('matchmaking_lobby_payments')
+          .select('lobby_id, status')
+          .eq('student_id', currentUserId)
+          .eq('status', 'paid')
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   throwIfError(lobbiesError);
   throwIfError(membershipsError);
+  if (userPaymentsError) throwIfError(userPaymentsError);
 
   const activeMemberships = new Set(
     (memberships ?? [])
       .filter((membership) => membership.student_id === currentUserId)
       .map((membership) => membership.lobby_id),
+  );
+
+  const paidLobbyIds = new Set(
+    (userPayments ?? []).map((payment) => payment.lobby_id),
   );
 
   const memberCounts = new Map<string, number>();
@@ -635,7 +663,7 @@ export async function fetchMatchmakingLobbies() {
     max_participants: lobby.max_participants,
     price_total: Number(lobby.price_total ?? 0),
     price_per_member: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max(memberCounts.get(lobby.id) ?? 0, 1),
+      Number(lobby.price_total ?? 0) / Math.max((memberCounts.get(lobby.id) ?? 0) + 1, 1),
     ),
     price_if_full: Math.ceil(
       Number(lobby.price_total ?? 0) / Math.max(lobby.max_participants, 1),
@@ -644,6 +672,7 @@ export async function fetchMatchmakingLobbies() {
     expires_at: lobby.expires_at,
     current_user_is_member: activeMemberships.has(lobby.id),
     current_user_is_creator: lobby.creator_id === currentUserId,
+    current_user_has_paid: paidLobbyIds.has(lobby.id),
     created_at: lobby.created_at,
     updated_at: lobby.updated_at,
   } satisfies MatchmakingLobby));
@@ -720,6 +749,14 @@ export async function kickMatchmakingLobbyMember(lobbyId: string, studentId: str
 
 export async function payLobbyShare(lobbyId: string) {
   const { error } = await supabase.rpc('pay_lobby_share', {
+    p_lobby_id: lobbyId,
+  });
+
+  throwIfError(error);
+}
+
+export async function forceLobbyToPendingPayment(lobbyId: string) {
+  const { error } = await supabase.rpc('force_lobby_to_pending_payment', {
     p_lobby_id: lobbyId,
   });
 

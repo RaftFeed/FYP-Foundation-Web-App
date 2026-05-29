@@ -1,8 +1,52 @@
-import { useState, useEffect } from 'react';
-import { CalendarDays, Clock3, MapPin, Trash2, UserRound, Users, X } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { CalendarDays, Clock3, MapPin, Timer, Trash2, UserRound, Users, X } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { formatCurrency, formatDate, formatTimeRange } from '../../../../lib/dashboardData';
 import { TutorAvailabilitySlot, MatchmakingLobby, fetchSlotStudents, fetchLobbyForSlot, fetchLobbyStudents, fetchLobbyMemberCount, fetchProfileDisplayName, kickMatchmakingLobbyMember, SlotStudent } from '../../../../lib/matchmakingData';
+
+function DetailCountdown({ expiresAt }: { expiresAt: string }) {
+  const computeRemaining = useCallback(() => {
+    return Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  }, [expiresAt]);
+
+  const [remaining, setRemaining] = useState(computeRemaining);
+
+  useEffect(() => {
+    setRemaining(computeRemaining());
+    const interval = window.setInterval(() => {
+      setRemaining(computeRemaining());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [computeRemaining]);
+
+  if (remaining <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-bold text-red-700">
+        <Timer className="h-3 w-3" />
+        Waktu habis
+      </span>
+    );
+  }
+
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  const isUrgent = remaining < 3600;
+  const label = hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${
+        isUrgent ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-amber-100 text-amber-700'
+      }`}
+    >
+      <Timer className="h-3 w-3" />
+      {label}
+    </span>
+  );
+}
 
 const slotStatusLabels: Record<TutorAvailabilitySlot['status'], string> = {
   available: 'Tersedia',
@@ -207,6 +251,12 @@ export function LobbyDetailModal({
               <span>{formatTimeRange(lobby.starts_at, lobby.ends_at)}</span>
               <span>·</span>
               <span>{memberCount}/{lobby.max_participants} siswa</span>
+              {(lobby.status === 'open' || lobby.status === 'pending_payment') && (
+                <>
+                  <span>·</span>
+                  <DetailCountdown expiresAt={lobby.expires_at} />
+                </>
+              )}
             </div>
           </div>
           <button
@@ -287,7 +337,18 @@ export function LobbyDetailModal({
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
+                      {(lobby.status === 'pending_payment' || lobby.status === 'paid' || lobby.status === 'completed') && (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                          s.payment_status === 'paid'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {s.payment_status === 'paid' ? 'Lunas' : 'Belum Lunas'}
+                        </span>
+                      )}
+                    </div>
                     <p className="truncate text-xs text-muted-foreground">{s.student_email}</p>
                   </div>
                   {lobby.current_user_is_creator && s.student_id !== currentUserId && (

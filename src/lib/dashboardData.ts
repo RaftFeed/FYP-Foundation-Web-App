@@ -187,37 +187,42 @@ export async function fetchSubjects() {
 }
 
 export async function fetchSubjectMatchmakingSummaries() {
-  const [{ data: subjectsData, error: subjectsError }, { data: slotsData, error: slotsError }] = await Promise.all([
-    supabase
-      .from('subjects')
-      .select('id, name, code, description, created_at')
-      .order('name', { ascending: true }),
-    supabase
-      .from('tutor_availability_slots')
-      .select(`
-        subject_id,
-        status,
-        tutor:tutor_profiles!inner(status)
-      `)
-      .in('status', ['available', 'held', 'booked'])
-      .eq('tutor.status', 'approved'),
-  ]);
+  const { data, error } = await supabase
+    .from('subject_matchmaking_overview')
+    .select('*')
+    .order('matchmaking_count', { ascending: false })
+    .order('name', { ascending: true });
 
-  throwIfError(subjectsError);
-  throwIfError(slotsError);
-
-  const activeSlotCounts = new Map<string, number>();
-  for (const row of (slotsData ?? []) as Array<{ subject_id: string; status: string }>) {
-    activeSlotCounts.set(row.subject_id, (activeSlotCounts.get(row.subject_id) ?? 0) + 1);
+  if (!error) {
+    return (data ?? []) as SubjectMatchmakingSummary[];
   }
 
-  return ((subjectsData ?? []) as Subject[]).map((subject) => ({
+  const { data: fallbackData, error: fallbackError } = await supabase
+    .from('subjects')
+    .select(`
+      id,
+      name,
+      code,
+      description,
+      created_at,
+      matchmaking_lobbies!left (
+        id,
+        status
+      )
+    `)
+    .order('name', { ascending: true });
+
+  throwIfError(fallbackError);
+
+  return ((fallbackData ?? []) as Array<Subject & { matchmaking_lobbies?: Array<{ id: string; status: string }> | null }>).map((subject) => ({
     id: subject.id,
     name: subject.name,
     code: subject.code,
     description: subject.description,
     created_at: subject.created_at,
-    matchmaking_count: activeSlotCounts.get(subject.id) ?? 0,
+    matchmaking_count: (subject.matchmaking_lobbies ?? []).filter((lobby) =>
+      ['open', 'pending_payment', 'paid'].includes(lobby.status),
+    ).length,
   }));
 }
 
