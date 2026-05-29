@@ -215,6 +215,12 @@ function throwIfError(error: { message: string } | null) {
   }
 }
 
+function getTodayStartIso() {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return startOfToday.toISOString();
+}
+
 function isMissingMatchmakingPaymentDependency(error: { code?: string; message?: string } | null) {
   if (!error) {
     return false;
@@ -275,7 +281,7 @@ export async function fetchAvailableTutorSlots() {
     `)
     .eq('status', 'available')
     .eq('tutor.status', 'approved')
-    .gte('starts_at', new Date().toISOString())
+    .gte('starts_at', getTodayStartIso())
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
@@ -400,7 +406,7 @@ export async function fetchStudentTutorScheduleSlots() {
     `)
     .in('status', ['available', 'held', 'booked'])
     .eq('tutor.status', 'approved')
-    .gte('starts_at', new Date().toISOString())
+    .gte('starts_at', getTodayStartIso())
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
@@ -508,7 +514,7 @@ export async function fetchLobbyForSlot(slotId: string): Promise<MatchmakingLobb
     max_participants: lobby.max_participants,
     price_total: Number(lobby.price_total ?? 0),
     price_per_member: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max(memberCount + 1, 1),
+      Number(lobby.price_total ?? 0) / Math.max(memberCount, 1),
     ),
     price_if_full: Math.ceil(
       Number(lobby.price_total ?? 0) / Math.max(lobby.max_participants, 1),
@@ -629,7 +635,7 @@ export async function fetchMatchmakingLobbies() {
     max_participants: lobby.max_participants,
     price_total: Number(lobby.price_total ?? 0),
     price_per_member: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max((memberCounts.get(lobby.id) ?? 0) + 1, 1),
+      Number(lobby.price_total ?? 0) / Math.max(memberCounts.get(lobby.id) ?? 0, 1),
     ),
     price_if_full: Math.ceil(
       Number(lobby.price_total ?? 0) / Math.max(lobby.max_participants, 1),

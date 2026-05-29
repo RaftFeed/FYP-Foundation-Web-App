@@ -31,6 +31,7 @@ export function DashboardView({
 
   const upcoming = joinedLobbies
     .filter((lobby) => lobby.status === 'open' || lobby.status === 'paid' || lobby.status === 'pending_payment')
+    .sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime())
     .slice(0, 3);
 
   return (
@@ -58,9 +59,6 @@ export function DashboardView({
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 className="text-2xl font-extrabold tracking-normal text-foreground">Kelas Mendatang</h2>
-          <button type="button" onClick={() => setActiveView('courses')} className="text-sm font-semibold text-foreground hover:underline">
-            Cari Kelas
-          </button>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-md">
@@ -69,8 +67,8 @@ export function DashboardView({
               <JoinedLobbyRow
                 key={lobby.id}
                 lobby={lobby}
-                onLeave={() => {}}
-                onShowDetail={() => {}}
+                onLeave={() => { }}
+                onShowDetail={() => { }}
               />
             ))
           ) : (

@@ -71,9 +71,6 @@ export function BookingsView({
     <section>
       <div className="mb-6">
         <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Histori Pemesanan Kelas</h1>
-        <p className="max-w-3xl text-sm font-medium leading-relaxed text-muted-foreground">
-          Berikut adalah riwayat pemesanan kelas dari lobby grup yang kamu ikuti.
-        </p>
       </div>
 
       <div className="mb-5 flex gap-3 overflow-x-auto border-b border-primary/10">
@@ -238,12 +235,11 @@ export function JoinedLobbyRow({
           {lobby.subject_name} bersama {lobby.tutor_name}
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
-          <span className={`rounded-full px-3 py-1 ${
-            lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
-            lobby.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
-            lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
-            'bg-secondary text-primary'
-          }`}>{lobbyStatusLabels[lobby.status]}</span>
+          <span className={`rounded-full px-3 py-1 ${lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
+              lobby.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
+                lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
+                  'bg-secondary text-primary'
+            }`}>{lobbyStatusLabels[lobby.status]}</span>
           <span>{formatDate(lobby.starts_at)}</span>
           <span>{formatTimeRange(lobby.starts_at, lobby.ends_at)}</span>
           <span>{memberCount}/{lobby.max_participants} siswa</span>

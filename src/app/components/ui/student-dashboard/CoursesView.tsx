@@ -46,7 +46,7 @@ export function CoursesView({
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-extrabold tracking-normal text-foreground">Daftar Mata Kuliah</h2>
-        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} Lobby</p>
+        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} matkul aktif</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -74,7 +74,7 @@ export function CoursesView({
                   className={`rounded-full px-3 py-1 text-xs font-bold ${hasMatchmaking ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                     }`}
                 >
-                  {subject.matchmaking_count} Lobby Grup
+                  {subject.matchmaking_count} Slot Tutor
                 </span>
               </div>
 
@@ -89,9 +89,9 @@ export function CoursesView({
               </p>
 
               <div className="mt-5 rounded-lg border border-primary/10 bg-secondary/60 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status Lobby</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status Slot</p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
-                  {hasMatchmaking ? `Ada ${subject.matchmaking_count} lobby aktif untuk matkul ini.` : 'Belum ada lobby aktif untuk matkul ini.'}
+                  {hasMatchmaking ? `Ada ${subject.matchmaking_count} slot tutor aktif untuk matkul ini.` : 'Belum ada slot tutor aktif untuk matkul ini.'}
                 </p>
               </div>
             </article>
