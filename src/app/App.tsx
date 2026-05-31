@@ -15,14 +15,14 @@ import { AuthPage } from './components/AuthPage';
 import { StudentDashboard } from './components/StudentDashboard';
 import { TutorDashboard } from './components/TutorDashboard';
 import tamaImage from '../img/Tutor/Tama.jpeg';
-import nataImage from '../img/Tutor/Nata.jpg';
+import nataImage from '../img/Tutor/Nata.JPG';
 import deboraImage from '../img/Tutor/Debora.jpg';
 import rifqiImage from '../img/Tutor/Rifqi.jpg';
 import hezkiImage from '../img/Tutor/Hezki.jpg';
 import farahImage from '../img/Tutor/Siti Farhah Siratuyasa.jpeg';
 import hannanImage from '../img/Tutor/Muhammad Abdi Hannan.jpg';
 import windiImage from '../img/Tutor/Windi.png';
-import rafidImage from '../img/Tutor/Rafid.jpg';
+import rafidImage from '../img/Tutor/Rafid.JPG';
 
 const themeTokens: Record<string, Record<string, string>> = {
   default: {
