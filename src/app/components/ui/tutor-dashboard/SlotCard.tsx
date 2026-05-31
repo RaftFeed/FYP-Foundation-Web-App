@@ -48,14 +48,15 @@ function DetailCountdown({ expiresAt }: { expiresAt: string }) {
   );
 }
 
-const slotStatusLabels: Record<TutorAvailabilitySlot['status'], string> = {
+const slotStatusLabels: Record<TutorAvailabilitySlot['status'] | 'expired', string> = {
   available: 'Tersedia',
   held: 'Lobby Terbuat',
   booked: 'Terbooking',
   cancelled: 'Dibatalkan',
+  expired: 'Kadaluarsa',
 };
 
-function slotStatusClasses(status: TutorAvailabilitySlot['status']) {
+function slotStatusClasses(status: TutorAvailabilitySlot['status'] | 'expired') {
   switch (status) {
     case 'available':
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -63,10 +64,19 @@ function slotStatusClasses(status: TutorAvailabilitySlot['status']) {
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'booked':
       return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'expired':
+      return 'bg-red-50 text-red-700 border-red-200';
     case 'cancelled':
     default:
       return 'bg-muted text-muted-foreground border-border';
   }
+}
+
+function getEffectiveStatus(slot: TutorAvailabilitySlot): TutorAvailabilitySlot['status'] | 'expired' {
+  if (new Date(slot.ends_at).getTime() < Date.now()) {
+    return 'expired';
+  }
+  return slot.status;
 }
 
 export function SlotCard({
@@ -84,15 +94,17 @@ export function SlotCard({
   onCreateLobby?: (slotId: string) => void;
   showCancel?: boolean;
 }) {
-  const canCancel = showCancel && slot.status === 'available';
+  const effectiveStatus = getEffectiveStatus(slot);
+  const isExpired = effectiveStatus === 'expired';
+  const canCancel = showCancel && slot.status === 'available' && !isExpired;
 
   return (
-    <article className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
+    <article className={`rounded-xl border bg-white p-5 shadow-md ${isExpired ? 'border-red-200 opacity-75' : 'border-primary/10'}`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${slotStatusClasses(slot.status)}`}>
-              {slotStatusLabels[slot.status]}
+            <span className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${slotStatusClasses(effectiveStatus)}`}>
+              {slotStatusLabels[effectiveStatus]}
             </span>
             {slot.recurrence_pattern === 'weekly' && (
               <span className="inline-flex rounded-md border border-primary/10 bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground">
@@ -269,6 +281,12 @@ export function LobbyDetailModal({
           </button>
         </div>
 
+        {lobby.description && (
+          <div className="mb-4 rounded-lg border border-primary/10 bg-secondary/40 px-4 py-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Catatan Pembuat</p>
+            <p className="text-sm font-medium text-foreground whitespace-pre-wrap">{lobby.description}</p>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto pr-1">
           <div className="mb-4 grid gap-3 sm:grid-cols-2">
