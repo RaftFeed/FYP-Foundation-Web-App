@@ -278,11 +278,7 @@ export function AdminDashboard() {
 
           {activeTab === 'tutors' && (
             <TutorsPanel
-              form={tutorForm}
-              subjects={subjects}
               tutors={tutors}
-              onChange={setTutorForm}
-              onSubmit={handleTutorSubmit}
               onEdit={(tutor) => {
                 setIsAddingTutor(false);
                 setEditingTutorId(tutor.id);
@@ -297,7 +293,23 @@ export function AdminDashboard() {
                 });
               }}
               onDelete={(id) => runAdminAction(() => deleteTutorProfile(id), 'Tutor deleted.')}
+              onAdd={() => {
+                setEditingTutorId(null);
+                setTutorForm(emptyTutor);
+                setIsAddingTutor(true);
+              }}
+            />
+          )}
+
+          {(editingTutorId !== null || isAddingTutor) && (
+            <TutorEditModal
+              form={tutorForm}
+              isNew={isAddingTutor}
+              subjects={subjects}
+              onChange={setTutorForm}
+              onSubmit={handleTutorSubmit}
               onCancel={() => {
+                setIsAddingTutor(false);
                 setEditingTutorId(null);
                 setTutorForm(emptyTutor);
               }}
@@ -388,25 +400,15 @@ function SubjectsPanel({
 }
 
 function TutorsPanel({
-  editingId,
-  form,
-  onCancel,
-  onChange,
-  onDelete,
-  onEdit,
-  onSubmit,
-  subjects,
   tutors,
+  onEdit,
+  onDelete,
+  onAdd,
 }: {
-  editingId: string | null;
-  form: typeof emptyTutor;
-  onCancel: () => void;
-  onChange: (form: typeof emptyTutor) => void;
-  onDelete: (id: string) => void;
-  onEdit: (tutor: TutorProfile) => void;
-  onSubmit: (event: FormEvent) => void;
-  subjects: Subject[];
   tutors: TutorProfile[];
+  onEdit: (tutor: TutorProfile) => void;
+  onDelete: (id: string) => void;
+  onAdd: () => void;
 }) {
   return (
     <section className="mt-6">
@@ -414,11 +416,7 @@ function TutorsPanel({
         <p className="text-sm font-medium text-muted-foreground">{tutors.length} tutor terdaftar</p>
         <button
           type="button"
-          onClick={() => {
-            setEditingTutorId(null);
-            setTutorForm(emptyTutor);
-            setIsAddingTutor(true);
-          }}
+          onClick={onAdd}
           className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition"
         >
           <GraduationCap className="h-4 w-4" />
@@ -436,20 +434,6 @@ function TutorsPanel({
           </tr>
         ))}
       </DataTable>
-
-      {(editingId !== null || isAddingTutor) && (
-        <TutorEditModal
-          form={form}
-          isNew={isAddingTutor}
-          subjects={subjects}
-          onChange={onChange}
-          onSubmit={onSubmit}
-          onCancel={() => {
-            setIsAddingTutor(false);
-            onCancel();
-          }}
-        />
-      )}
     </section>
   );
 }
