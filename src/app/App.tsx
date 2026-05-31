@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import useEmblaCarousel from 'embla-carousel-react';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { MatkulCatalog } from './components/MatkulCatalog';
@@ -13,7 +14,15 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { AuthPage } from './components/AuthPage';
 import { StudentDashboard } from './components/StudentDashboard';
 import { TutorDashboard } from './components/TutorDashboard';
-import { fetchApprovedTutorCards, type PublicTutorCard } from '../lib/dashboardData';
+import tamaImage from '../img/Tutor/Tama.jpeg';
+import nataImage from '../img/Tutor/Nata.JPG';
+import deboraImage from '../img/Tutor/Debora.jpg';
+import rifqiImage from '../img/Tutor/Rifqi.jpg.JPG';
+import hezkiImage from '../img/Tutor/Hezki.jpg';
+import farahImage from '../img/Tutor/Siti Farhah Siratuyasa.jpeg';
+import hannanImage from '../img/Tutor/Muhammad Abdi Hannan.jpg';
+import windiImage from '../img/Tutor/Windi.png';
+import rafidImage from '../img/Tutor/Rafid.jpg';
 
 const themeTokens: Record<string, Record<string, string>> = {
   default: {
@@ -25,6 +34,104 @@ const themeTokens: Record<string, Record<string, string>> = {
     '--background': '#ffffff',
   }
 };
+
+const featuredTutors = [
+  {
+    id: 'juniarto-gautama-simanjuntak',
+    name: 'Juniarto Gautama Simanjuntak, S.Si., M.Si',
+    nickname: 'Kak Tama',
+    education: 'S1 Biologi IPB, S2 Biosains Hewan IPB, saat ini S3 Biomedical Science di NAIST Jepang.',
+    expertise: 'Biologi, Bahasa Inggris, Karya Tulis, bimbingan khusus',
+    achievement: 'Asisten praktikum Biologi Dasar reguler dan internasional 2018-2023, ASEAN Youth Organization Ambassador 2020, publikasi jurnal ilmiah Scopus dan SINTA.',
+    instagram: '@juntama17',
+    imageUrl: tamaImage,
+  },
+  {
+    id: 'dzulfiqar-yudha-pranata',
+    name: 'Dzulfiqar Yudha Pranata',
+    nickname: 'Kak Nata',
+    education: 'S1 Fisika IPB Angkatan 59.',
+    expertise: 'Fisika, Kalkulus',
+    achievement: 'Asisten Praktikum Fisika ST 2023.',
+    instagram: '@prnataydha',
+    imageUrl: nataImage,
+  },
+  {
+    id: 'maria-debora-fransiska',
+    name: 'Maria Debora Fransiska',
+    nickname: 'Kak Debora',
+    education: 'S1 Kedokteran Hewan - SKHB IPB Angkatan 58.',
+    expertise: 'Profesi Veteriner dan Kesejahteraan Hewan (PVKH)',
+    achievement: 'Asisten Praktikum Biologi ST 2023.',
+    instagram: '@midbrfs',
+    imageUrl: deboraImage,
+  },
+  {
+    id: 'rifqi-aulia-ramadhan',
+    name: 'Rifqi Aulia Ramadhan',
+    nickname: 'Kak Iqi',
+    education: 'S1 Kimia IPB Angkatan 58.',
+    expertise: 'Kimia Organik, Dasar Kimia Pangan, Kimia ST',
+    achievement: 'Finalis ONMIPA-PT Kimia 2023 dan 2024, Juara 1 Chemistry National Olympiad XXVIII Universitas Udayana 2024, asisten praktikum Kimia Organik dan Kimia ST.',
+    instagram: '@rifqi_aramadhan',
+    imageUrl: rifqiImage,
+  },
+  {
+    id: 'yehezki-novandri-liman',
+    name: 'Yehezki Novandri Liman',
+    nickname: 'Kak Hezki',
+    education: 'S1 Statistika dan Sains Data IPB Angkatan 60.',
+    expertise: 'Statistika dan Analisis Data, Computational Thinking (CT)',
+    achievement: 'Juara 3 OSTARWIL Matematika tingkat kabupaten 2022 dan Staff IHMSI Nasional 2024-2026.',
+    instagram: 'instagram.com/ynl.washere_',
+    imageUrl: hezkiImage,
+  },
+  {
+    id: 'siti-farhah-siratuyasa',
+    name: 'Siti Farhah Siratuyasa',
+    nickname: 'Kak Farah',
+    education: 'S1-S2 Fisika IPB Angkatan 58 melalui program sinergi.',
+    expertise: 'Fisika, Matematika dan Berpikir Logis (MBL), Kalkulus',
+    achievement: 'Mahasiswa sinergi S1-S2 Fisika IPB dan asisten praktikum Fisika International Class.',
+    instagram: '@farahsrtysa',
+    imageUrl: farahImage,
+  },
+  {
+    id: 'muhammad-abdi-hannan',
+    name: 'Muhammad Abdi Hannan',
+    nickname: 'Kak Hannan',
+    education: 'S1 Teknik Industri Pertanian Angkatan 58, program sinergi S2.',
+    expertise: 'Kimia ST, Matematika dan IPA SMA',
+    achievement: 'Asisten Praktikum Kimia ST 2022-2023 dan finalis OSP Kimia Jawa Tengah 2020.',
+    instagram: '@abdi_hnn',
+    imageUrl: hannanImage,
+  },
+  {
+    id: 'windi-gunawan',
+    name: 'Windi Gunawan',
+    nickname: 'Kak Windi',
+    education: 'S1 Statistika dan Sains Data IPB Angkatan 58.',
+    expertise: 'Statistika dan Analisis Data',
+    achievement: 'Juara 1 dan Best Speaker Infographic Competition Jambore Statistika XIII 2024, serta beberapa capaian kompetisi statistik nasional lainnya.',
+    instagram: '@wndignwn',
+    imageUrl: windiImage,
+  },
+  {
+    id: 'rafid-harsyah-syauqirahman',
+    name: 'Rafid Harsyah Syauqirahman',
+    nickname: 'Kak Rafid',
+    education: 'S1 Ilmu Komputer IPB Angkatan 61.',
+    expertise: 'Fisika, Matematika dan Berpikir Logis (MBL)',
+    achievement: 'Juara 1 Mathematics Competition Himatika UIN Jakarta 2023.',
+    instagram: '@rafidhrsyh',
+    imageUrl: rafidImage,
+  },
+] as const;
+
+const featuredTutorRows = [
+  featuredTutors.filter((_, index) => index % 2 === 0),
+  featuredTutors.filter((_, index) => index % 2 === 1),
+] as const;
 
 function getCurrentRoute() {
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -51,8 +158,16 @@ export default function App() {
 function AppContent() {
   const { session, role, isAuthLoading } = useAuth();
   const [route, setRoute] = useState(getCurrentRoute);
-  const [tutors, setTutors] = useState<PublicTutorCard[]>([]);
-  const [isLoadingTutors, setIsLoadingTutors] = useState(false);
+  const [tutorTopEmblaRef, tutorTopEmblaApi] = useEmblaCarousel({
+    align: 'start',
+    loop: true,
+    duration: 24,
+  });
+  const [tutorBottomEmblaRef, tutorBottomEmblaApi] = useEmblaCarousel({
+    align: 'start',
+    loop: true,
+    duration: 24,
+  });
 
   useEffect(() => {
     function handleRouteChange() {
@@ -64,34 +179,38 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (session) {
+    if (!tutorTopEmblaApi || featuredTutorRows[0].length <= 1) {
       return;
     }
 
-    let active = true;
-    setIsLoadingTutors(true);
+    const autoplay = window.setInterval(() => {
+      if (!tutorTopEmblaApi.canScrollNext()) {
+        tutorTopEmblaApi.scrollTo(0);
+        return;
+      }
 
-    fetchApprovedTutorCards()
-      .then((nextTutors) => {
-        if (active) {
-          setTutors(nextTutors);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setTutors([]);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoadingTutors(false);
-        }
-      });
+      tutorTopEmblaApi.scrollNext();
+    }, 3400);
 
-    return () => {
-      active = false;
-    };
-  }, [session]);
+    return () => window.clearInterval(autoplay);
+  }, [tutorTopEmblaApi]);
+
+  useEffect(() => {
+    if (!tutorBottomEmblaApi || featuredTutorRows[1].length <= 1) {
+      return;
+    }
+
+    const autoplay = window.setInterval(() => {
+      if (!tutorBottomEmblaApi.canScrollPrev()) {
+        tutorBottomEmblaApi.scrollTo(featuredTutorRows[1].length - 1);
+        return;
+      }
+
+      tutorBottomEmblaApi.scrollPrev();
+    }, 3400);
+
+    return () => window.clearInterval(autoplay);
+  }, [tutorBottomEmblaApi]);
 
   if (isAuthLoading) {
     return (
@@ -129,9 +248,9 @@ function AppContent() {
       <Testimonials />
 
       {/* Katalog Tutor */}
-      <section id="katalog" className="py-20 bg-secondary">
+      <section id="katalog" className="py-16 bg-secondary">
         <div className="max-w-7xl mx-auto px-4 md:px-5">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-10 gap-4">
+          <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
               {/* <p className="text-primary text-sm mb-2" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Temukan Tutor
@@ -145,27 +264,32 @@ function AppContent() {
           </div>
 
           <div className="flex gap-8 items-start">
-            <div className="flex-1">
-              <div className="overflow-x-auto pb-5 [scrollbar-color:rgba(39,38,157,0.35)_transparent] [scrollbar-width:thin]">
-                {isLoadingTutors && (
-                  <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
-                    Memuat tutor dari database...
-                  </div>
-                )}
-                {!isLoadingTutors && tutors.length === 0 && (
-                  <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
-                    Belum ada tutor approved di database.
-                  </div>
-                )}
-                {tutors.length > 0 && (
-                  <div className="flex min-w-max gap-6">
-                    {tutors.map((tutor) => (
-                      <div key={tutor.id} className="w-[220px] shrink-0">
+            <div className="min-w-0 flex-1">
+              <div className="space-y-4">
+                <div className="overflow-hidden" ref={tutorTopEmblaRef}>
+                  <div className="-ml-5 flex">
+                    {featuredTutorRows[0].map((tutor) => (
+                      <div
+                        key={tutor.id}
+                        className="min-w-0 flex-[0_0_100%] pl-5 sm:flex-[0_0_88%] md:flex-[0_0_70%] lg:flex-[0_0_48%] xl:flex-[0_0_39%]"
+                      >
                         <TutorCard {...tutor} />
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
+                <div className="overflow-hidden" ref={tutorBottomEmblaRef}>
+                  <div className="-ml-5 flex">
+                    {featuredTutorRows[1].map((tutor) => (
+                      <div
+                        key={tutor.id}
+                        className="min-w-0 flex-[0_0_100%] pl-5 sm:flex-[0_0_88%] md:flex-[0_0_70%] lg:flex-[0_0_48%] xl:flex-[0_0_39%]"
+                      >
+                        <TutorCard {...tutor} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
