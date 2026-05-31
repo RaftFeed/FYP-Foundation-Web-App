@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, Loader2, Lock, Mail, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import loginImage from '../../img/Login.png';
 
 type AuthMode = 'login' | 'signup';
 
@@ -70,7 +71,7 @@ export function AuthPage() {
       <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
         <section className="relative hidden min-h-screen overflow-hidden bg-muted lg:block">
           <img
-            src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1200&h=1400&fit=crop"
+            src={loginImage}
             alt=""
             className="h-full w-full object-cover"
           />
