@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Menu, X, GraduationCap } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import logoImage from '../../img/FYP_Logo.png';
 
 function openAuthPage(mode: 'login' | 'signup') {
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -19,20 +20,19 @@ export function Header() {
 
   return (
     <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
-      <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="max-w-8xl mx-auto px-4 md:px-50 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <a 
             href="#beranda" 
-            className="flex items-center gap-2.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg px-1 py-1"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-lg px-1 py-1 shrink-0"
             aria-label="FYP Foundation - Home"
           >
-            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" aria-hidden="true" />
-            </div>
-            <span className="text-[1.1rem] text-primary" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
-              FYP<span className="text-accent"> Foundation</span>
-            </span>
+            <img
+              src={logoImage}
+              alt="FYP Foundation"
+              className="block h-14 w-auto max-w-[320px] md:h-16 object-contain"
+            />
           </a>
 
           {/* Desktop Nav */}
@@ -62,10 +62,10 @@ export function Header() {
             <button 
               type="button"
               onClick={() => openAuthPage('signup')}
-              className="px-5 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 active:scale-95 focus:outline-none transition-all text-sm font-medium shadow-sm"
+              className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 active:scale-95 focus:outline-none transition-all text-sm font-medium shadow-sm"
               aria-label="Sign up for free"
             >
-              Daftar Gratis
+              Daftar
             </button>
           </div>
 

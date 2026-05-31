@@ -52,15 +52,23 @@ const testimonials: Testimonial[] = [
     image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face',
     verified: true,
   },
+  {
+    id: 5,
+    name: 'Budi Santoso',
+    role: 'Mahasiswa PPKU IPB',
+    achievement: 'Predikat Cum Laude',
+    text: 'Kualitas terjamin, tutor2nya qualified dan punya track record bagus. Dapat value lebih dari yang diharapkan untuk setiap rupiah yang dikeluarkan.',
+    rating: 5,
+    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face',
+    verified: true,
+  },
 ];
 
 export function Testimonials() {
   return (
-    <section className="py-24 bg-gradient-to-b from-white to-secondary/30">
-      <div className="max-w-7xl mx-auto px-6">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <p className="text-primary text-sm font-bold tracking-wide mb-3">TESTIMONI MAHASISWA</p>
+    <section className="py-16 bg-gradient-to-b from-white to-secondary/30">
+      <div className="max-w-7xl mx-auto px-4 md:px-5">
+        <div className="mb-10 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             Ribuan Mahasiswa Telah Mencapai<br className="hidden sm:block" />
             <span className="text-primary">Target Akademik Mereka</span>
@@ -70,67 +78,60 @@ export function Testimonials() {
           </p>
         </div>
 
-        {/* Testimonials Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {testimonials.map((testimonial) => (
-            <article
-              key={testimonial.id}
-              className="bg-white rounded-xl border border-border/50 hover:border-primary/30 hover:shadow-lg transition-all duration-300 p-6 flex flex-col"
-            >
-              {/* Stars */}
-              <div className="flex gap-1 mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${i < testimonial.rating ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'
-                      }`}
-                    aria-hidden="true"
+        <div className="mb-8 overflow-x-auto pb-4 [scrollbar-color:rgba(39,38,157,0.4)_transparent] [scrollbar-width:thin]">
+          <div className="flex min-w-max gap-5 snap-x snap-mandatory">
+            {testimonials.map((testimonial) => (
+              <article
+                key={testimonial.id}
+                className="w-[300px] snap-start rounded-2xl border border-primary/10 bg-secondary/70 p-4 shadow-sm"
+              >
+                <div className="mb-4 flex items-start gap-3">
+                  <img
+                    src={testimonial.image}
+                    alt={testimonial.name}
+                    className="h-14 w-14 rounded-full bg-white object-cover"
+                    loading="lazy"
                   />
-                ))}
-              </div>
 
-              {/* Quote Icon */}
-              <Quote className="w-5 h-5 text-primary/15 mb-3" aria-hidden="true" />
-
-              {/* Review Text */}
-              <p className="text-foreground text-sm leading-relaxed mb-6 flex-grow font-medium">"{testimonial.text}"</p>
-
-              {/* Achievement Badge */}
-              <div className="mb-5 inline-flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200/50">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
-                <span className="text-green-700 text-xs font-semibold">{testimonial.achievement}</span>
-              </div>
-
-              {/* Author */}
-              <div className="flex items-center gap-3 pt-4 border-t border-border/30">
-                <img
-                  src={testimonial.image}
-                  alt={testimonial.name}
-                  className="w-11 h-11 rounded-full object-cover"
-                  loading="lazy"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1">
-                    <p className="text-foreground text-sm font-semibold">{testimonial.name}</p>
-                    {testimonial.verified && (
-                      <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Verified">
-                        <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    )}
+                  <div className="pt-1">
+                    <div className="flex items-center gap-1">
+                      <p className="text-lg font-semibold text-foreground">{testimonial.name}</p>
+                      {testimonial.verified && (
+                        <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Verified">
+                          <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground">{testimonial.role}</p>
                   </div>
-                  <p className="text-muted-foreground text-xs">{testimonial.role}</p>
                 </div>
-              </div>
-            </article>
-          ))}
+
+                <div className="mb-3 flex gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`h-4 w-4 ${i < testimonial.rating ? 'fill-primary text-primary' : 'fill-primary/10 text-primary/10'}`}
+                      aria-hidden="true"
+                    />
+                  ))}
+                </div>
+
+                <Quote className="mb-2 h-5 w-5 text-primary/20" aria-hidden="true" />
+
+                <p className="mb-4 min-h-[108px] text-sm leading-relaxed text-foreground">
+                  "{testimonial.text}"
+                </p>
+
+              </article>
+            ))}
+          </div>
         </div>
 
-        {/* Trust Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-8 bg-white rounded-2xl border border-border/30">
+        <div className="grid grid-cols-2 gap-4 rounded-2xl border border-border/30 bg-white p-6 sm:grid-cols-4">
           {[
             { label: 'Mahasiswa Aktif', value: '500+' },
             { label: 'Rating Rata-rata', value: '4.9/5' },
-            { label: 'Tutor Verifikasi', value: '80+' },
+            { label: 'Tutor Verifikasi', value: '20+' },
             { label: 'Mata Kuliah', value: '12+' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">

@@ -1,283 +1,163 @@
-import { useState } from 'react';
-import { Atom, Calculator, FlaskConical, Code2, Binary, Dna, X, AlertTriangle, Users, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Atom, Calculator, FlaskConical, Code2, Binary, Dna, ArrowRight } from 'lucide-react';
+import useEmblaCarousel from 'embla-carousel-react';
+import { fetchSubjectMatchmakingSummaries, type SubjectMatchmakingSummary } from '../../lib/dashboardData';
 
-interface MatkulItem {
-  id: string;
-  name: string;
-  code: string;
-  icon: React.ElementType;
-  color: string;
-  bgColor: string;
-  kelasAktif: number;
-  description: string;
-}
-
-const matkulList: MatkulItem[] = [
-  {
-    id: 'fisika',
-    name: 'Fisika Dasar',
-    code: 'FIS101',
-    icon: Atom,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    kelasAktif: 3,
-    description: 'Mekanika, termodinamika, gelombang & optika',
-  },
-  {
-    id: 'kalkulus',
-    name: 'Kalkulus',
-    code: 'MAT101',
-    icon: Calculator,
-    color: 'text-primary',
-    bgColor: 'bg-secondary',
-    kelasAktif: 5,
-    description: 'Limit, turunan, integral, dan deret',
-  },
-  {
-    id: 'kimia',
-    name: 'Kimia Dasar',
-    code: 'KIM101',
-    icon: FlaskConical,
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-50',
-    kelasAktif: 2,
-    description: 'Stoikiometri, ikatan kimia, larutan',
-  },
-  {
-    id: 'pemrograman',
-    name: 'Pemrograman',
-    code: 'KOM101',
-    icon: Code2,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50',
-    kelasAktif: 0,
-    description: 'Dasar algoritma & pemrograman Python/C++',
-  },
-  {
-    id: 'matdis',
-    name: 'Matematika Diskrit',
-    code: 'MAT201',
-    icon: Binary,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
-    kelasAktif: 0,
-    description: 'Logika, graf, kombinatorika, relasi',
-  },
-  {
-    id: 'biologi',
-    name: 'Biologi Umum',
-    code: 'BIO101',
-    icon: Dna,
-    color: 'text-teal-600',
-    bgColor: 'bg-teal-50',
-    kelasAktif: 4,
-    description: 'Sel, genetika, ekologi, evolusi',
-  },
+const subjectStyles = [
+  { icon: Atom, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  { icon: Calculator, color: 'text-primary', bgColor: 'bg-secondary' },
+  { icon: FlaskConical, color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
+  { icon: Code2, color: 'text-orange-600', bgColor: 'bg-orange-50' },
+  { icon: Binary, color: 'text-fuchsia-600', bgColor: 'bg-fuchsia-50' },
+  { icon: Dna, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
 
-interface CreateGroupModalProps {
-  matkul: MatkulItem | null;
-  onClose: () => void;
-  onConfirm: () => void;
+function getSubjectStyle(index: number) {
+  return subjectStyles[index % subjectStyles.length];
 }
 
-function CreateGroupModal({ matkul, onClose, onConfirm }: CreateGroupModalProps) {
-  if (!matkul) return null;
+function getSubjectImage(subjectName: string) {
+  const normalized = subjectName.toLowerCase();
 
-  const Icon = matkul.icon;
+  if (normalized.includes('fisika')) {
+    return 'https://images.unsplash.com/photo-1532187643603-ba119ca4109e?auto=format&fit=crop&w=900&q=80';
+  }
+  if (normalized.includes('kalkulus') || normalized.includes('matematika')) {
+    return 'https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&w=900&q=80';
+  }
+  if (normalized.includes('kimia')) {
+    return 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=80';
+  }
+  if (normalized.includes('program') || normalized.includes('coding') || normalized.includes('komput')) {
+    return 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=900&q=80';
+  }
+  if (normalized.includes('biologi')) {
+    return 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=900&q=80';
+  }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose} role="presentation">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="create-group-title">
-        <div className="h-1.5 bg-gradient-to-r from-primary to-accent w-full" aria-hidden="true" />
-
-        <div className="p-8">
-          <button
-            onClick={onClose}
-            className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-muted hover:bg-border focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-            aria-label="Close dialog"
-          >
-            <X className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-          </button>
-
-          <div className="flex justify-center mb-5">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border-2 border-amber-200 flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-amber-500" />
-            </div>
-          </div>
-
-          <div className="flex justify-center mb-4">
-            <span
-              className={`inline-flex items-center gap-2 ${matkul.bgColor} ${matkul.color} text-sm px-4 py-1.5 rounded-full border border-current/20`}
-              style={{ fontWeight: 600 }}
-            >
-              <Icon className="w-4 h-4" />
-              {matkul.name} - {matkul.code}
-            </span>
-          </div>
-
-          <h3 className="text-center text-foreground mb-2" id="create-group-title">Belum Ada Kelas Aktif</h3>
-          <p className="text-center text-muted-foreground mb-6 text-sm leading-relaxed">
-            Belum ada kelas grup aktif untuk mata kuliah ini. Masuk sebagai student untuk memilih slot tutor yang tersedia dan membuat grup baru.
-          </p>
-
-          <div className="bg-secondary rounded-xl p-4 mb-6 flex gap-3 border border-primary/10">
-            <Users className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-            <p className="text-sm text-primary/80">
-              Grup public atau private dibuat dari jadwal tutor yang sudah tersedia di database.
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 border-2 border-border text-muted-foreground rounded-xl hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-medium"
-            >
-              Batal
-            </button>
-            <button
-              onClick={onConfirm}
-              className="flex-1 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-md"
-            >
-              <Users className="w-4 h-4" aria-hidden="true" />
-              Masuk & Buat Grup
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=900&q=80';
 }
 
 export function MatkulCatalog() {
-  const [selectedMatkul, setSelectedMatkul] = useState<MatkulItem | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [subjects, setSubjects] = useState<SubjectMatchmakingSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: 'start',
+    loop: true,
+    duration: 24,
+  });
 
-  const handleCardClick = (matkul: MatkulItem) => {
-    if (matkul.kelasAktif === 0) {
-      setSelectedMatkul(matkul);
-      setShowCreateModal(true);
+  useEffect(() => {
+    let active = true;
+
+    fetchSubjectMatchmakingSummaries()
+      .then((nextSubjects) => {
+        if (active) {
+          setSubjects(nextSubjects);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSubjects([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!emblaApi || subjects.length <= 1) {
+      return;
     }
-  };
 
-  const handleConfirmCreate = () => {
-    setShowCreateModal(false);
-    setSelectedMatkul(null);
-    window.location.href = `${import.meta.env.BASE_URL}login`;
-  };
+    const autoplay = window.setInterval(() => {
+      if (!emblaApi.canScrollNext()) {
+        emblaApi.scrollTo(0);
+        return;
+      }
+
+      emblaApi.scrollNext();
+    }, 3200);
+
+    return () => window.clearInterval(autoplay);
+  }, [emblaApi, subjects.length]);
 
   return (
-    <>
-      <section id="matkul" className="py-20 bg-secondary">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-12 gap-4">
-            <div>
-              <p className="text-primary text-sm mb-2" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Mata Kuliah PPKU
-              </p>
-              <h2 className="text-foreground">
-                Pilih & Gabung
-                <br />
-                <span className="text-primary">Kelas Belajar</span>
-              </h2>
-            </div>
-            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-              Bergabung ke kelas grup aktif atau buat grup baru jika belum tersedia. Belajar jadi lebih efektif!
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {matkulList.map((matkul) => {
-              const Icon = matkul.icon;
-              const hasKelas = matkul.kelasAktif > 0;
-
-              return (
-                <div
-                  key={matkul.id}
-                  onClick={() => handleCardClick(matkul)}
-                  className={`bg-white rounded-2xl border p-6 transition-all duration-300 group relative overflow-hidden ${
-                    hasKelas
-                      ? 'border-border hover:border-primary hover:shadow-xl hover:-translate-y-1 cursor-pointer'
-                      : 'border-dashed border-border hover:border-amber-400 hover:shadow-lg cursor-pointer'
-                  }`}
-                >
-                  <div
-                    className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl ${
-                      hasKelas ? 'bg-gradient-to-br from-secondary/50 to-transparent' : 'bg-gradient-to-br from-amber-50/50 to-transparent'
-                    }`}
-                  />
-
-                  <div className="relative">
-                    <div className="flex items-start justify-between mb-5">
-<div className={`w-[52px] h-[52px] ${matkul.bgColor} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`} aria-hidden="true">
-                        <Icon className={`w-6 h-6 ${matkul.color}`} />
-                      </div>
-
-                      {hasKelas ? (
-                        <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs px-2.5 py-1 rounded-full" style={{ fontWeight: 600 }}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                          {matkul.kelasAktif} Kelas Aktif
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-xs px-2.5 py-1 rounded-full" style={{ fontWeight: 600 }}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          0 Kelas Tersedia
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mb-5">
-                      <h3 className="text-foreground mb-1">{matkul.name}</h3>
-                      <span className="inline-block text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md mb-2" style={{ fontWeight: 600 }}>
-                        {matkul.code}
-                      </span>
-                      <p className="text-muted-foreground text-sm leading-relaxed">{matkul.description}</p>
-                    </div>
-
-                    <div className="pt-4 border-t border-border">
-                      {hasKelas ? (
-                        <button className="w-full py-2.5 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all text-sm flex items-center justify-center gap-2 shadow-sm">
-                          Lihat & Gabung Kelas
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button className="w-full py-2.5 border-2 border-amber-400 text-amber-700 rounded-xl hover:bg-amber-50 transition-all text-sm flex items-center justify-center gap-2">
-                          <Users className="w-4 h-4" />
-                          Buat Grup Baru
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
-              <span>Kelas aktif - langsung bergabung</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-              <span>Belum ada kelas - klik untuk buat grup baru</span>
-            </div>
+    <section id="matkul" className="bg-secondary py-20">
+      <div className="mx-auto max-w-7xl px-4 md:px-5">
+        <div className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-foreground">
+              Pilih & Gabung
+              <br />
+              <span className="text-primary">Kelas Belajar</span>
+            </h2>
           </div>
         </div>
-      </section>
 
-      {showCreateModal && (
-        <CreateGroupModal
-          matkul={selectedMatkul}
-          onClose={() => {
-            setShowCreateModal(false);
-            setSelectedMatkul(null);
-          }}
-          onConfirm={handleConfirmCreate}
-        />
-      )}
+        {isLoading ? (
+          <div className="rounded-3xl border border-primary/10 bg-white p-10 text-center text-sm font-medium text-muted-foreground shadow-sm">
+            Memuat mata kuliah dari database...
+          </div>
+        ) : subjects.length === 0 ? (
+          <div className="rounded-3xl border border-primary/10 bg-white p-10 text-center text-sm font-medium text-muted-foreground shadow-sm">
+            Belum ada mata kuliah yang tersedia di database.
+          </div>
+        ) : (
+          <div className="overflow-hidden" ref={emblaRef}>
+            <div className="-ml-5 flex pb-6">
+              {subjects.map((subject, index) => {
+                const { icon: Icon, color, bgColor } = getSubjectStyle(index);
+                const hasKelas = subject.matchmaking_count > 0;
 
-    </>
+                return (
+                  <div
+                    key={subject.id}
+                    className="min-w-0 flex-[0_0_100%] pl-5 sm:flex-[0_0_50%] lg:flex-[0_0_33.3333%] xl:flex-[0_0_25%]"
+                  >
+                    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl">
+                      <div className="relative h-48 overflow-hidden bg-gradient-to-br from-zinc-200 via-zinc-100 to-zinc-300">
+                        <img
+                          src={getSubjectImage(subject.name)}
+                          alt={subject.name}
+                          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(39,38,157,0.18),transparent_55%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+
+                        <div className="absolute right-4 top-4 rounded-full bg-white px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+                          {hasKelas ? `${subject.matchmaking_count} Kelas Tersedia` : '0 Kelas Tersedia'}
+                        </div>
+
+                      </div>
+
+                      <div className="flex flex-1 flex-col p-5">
+                        <div className="mb-3">
+                          <h3 className="text-xl font-semibold leading-tight text-foreground">{subject.name}</h3>
+                          <span className="mt-2 inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                            {subject.code ?? 'Tanpa kode'}
+                          </span>
+                        </div>
+
+                        <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+                          {subject.description?.trim() || 'Deskripsi mata kuliah belum tersedia di database.'}
+                        </p>
+                      </div>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
