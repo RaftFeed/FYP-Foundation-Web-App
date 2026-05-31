@@ -1,14 +1,15 @@
-import { GraduationCap, Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin } from 'lucide-react';
+import logoImage from '../../img/FYP_no_bg.png';
 
 export function Footer() {
   return (
     <footer className="bg-foreground text-white">
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
-          <div className="lg:col-span-1">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-white" />
+        <div className="grid gap-12 lg:grid-cols-[1.05fr_minmax(0,0.95fr)] mb-12">
+          <div>
+            <div className="flex items-center gap-1 mb-4">
+              <div className="w-12 h-12 overflow-hidden items-center justify-center">
+                <img src={logoImage} alt="FYP Foundation" className="h-full w-full object-contain" />
               </div>
               <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>
                 FYP<span className="text-accent"> Foundation</span>
@@ -33,46 +34,43 @@ export function Footer() {
             </div>
           </div>
 
-          <div>
-            <h4 className="text-white mb-4">Untuk Mahasiswa</h4>
-            <ul className="space-y-2.5 text-sm text-gray-400">
-              {['Katalog Mata Kuliah', 'Cari Tutor', 'Bergabung Kelas Grup', 'Buat Kelas Privat', 'Ulasan Mahasiswa'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="hover:text-white hover:translate-x-0.5 transition-all inline-block">
-                    {item}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <div className="grid gap-10 sm:grid-cols-2 w-full max-w-2xl justify-self-center">
+            <div className="text-center sm:text-left">
+              <h4 className="text-white mb-4">Untuk Mahasiswa</h4>
+              <ul className="space-y-2.5 text-sm text-gray-400">
+                {[
+                  { label: 'Katalog Mata Kuliah', href: '#matkul' },
+                  { label: 'List Tutor', href: '#katalog' },
+                  { label: 'Bergabung Kelas Grup', href: '#panduan' },
+                  { label: 'Testimoni', href: '#testimoni' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <a href={item.href} className="hover:text-white hover:translate-x-0.5 transition-all inline-block">
+                      {item.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          <div>
-            <h4 className="text-white mb-4">Untuk Tutor</h4>
-            <ul className="space-y-2.5 text-sm text-gray-400">
-              {['Daftar Jadi Tutor', 'Panduan Tutor', 'Dashboard Tutor', 'Kebijakan Tutor', 'Kisah Sukses'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="hover:text-white hover:translate-x-0.5 transition-all inline-block">
-                    {item}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white mb-4">Perusahaan</h4>
-            <ul className="space-y-2.5 text-sm text-gray-400">
-              {['Tentang Kami', 'Blog & Artikel', 'Karir', 'Kebijakan Privasi', 'Syarat & Ketentuan'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="hover:text-white hover:translate-x-0.5 transition-all inline-block">
-                    {item}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <div className="text-center sm:text-left">
+              <h4 className="text-white mb-4">Untuk Tutor</h4>
+              <ul className="space-y-2.5 text-sm text-gray-400">
+                {[
+                  { label: 'Daftar Jadi Tutor', href: '#beranda' },
+                  { label: 'Panduan Tutor', href: '#panduan' },
+                  { label: 'Dashboard Tutor', href: '#katalog' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <a href={item.href} className="hover:text-white hover:translate-x-0.5 transition-all inline-block">
+                      {item.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
-
       </div>
 
       <div className="border-t border-white/10">

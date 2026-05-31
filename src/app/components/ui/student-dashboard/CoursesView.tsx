@@ -65,9 +65,8 @@ export function CoursesView({
 
           return (
             <article key={subject.id} className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
-              <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mata Kuliah</p>
                   <h3 className="text-lg font-extrabold text-foreground">{subject.name}</h3>
                 </div>
                 <span
@@ -78,8 +77,8 @@ export function CoursesView({
                 </span>
               </div>
 
-              <div className="mb-4 flex items-center gap-2">
-                <span className="rounded-md border border-primary/20 bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="py-1 text-xs font-semibold text-primary">
                   {subject.code ?? 'Tanpa kode'}
                 </span>
               </div>

@@ -358,7 +358,7 @@ export function LobbyDetailModal({
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
                       {(lobby.status === 'pending_payment' || lobby.status === 'paid' || lobby.status === 'completed') && (
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                        <span className={`inline-flex min-w-[4.75rem] items-center justify-center rounded-full px-2.5 py-0.5 text-center text-[9px] font-bold leading-tight ${
                           s.payment_status === 'paid'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-amber-100 text-amber-700'
@@ -380,7 +380,7 @@ export function LobbyDetailModal({
                     </button>
                   )}
                   <div className="shrink-0 text-right">
-                    <p className="mt-1 text-[10px] font-medium text-muted-foreground">Gabung {new Date(s.joined_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="mt-1 text-[8px] font-medium text-muted-foreground">Gabung {new Date(s.joined_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 </div>
               ))}

@@ -47,12 +47,21 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   }
 
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 0rem;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  section[id] {
+    scroll-margin-top: 6.5rem;
   }
 
   h1 {

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, Loader2, Lock, Mail, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import logoImage from '../../img/FYP_Logo.png';
 import loginImage from '../../img/Login.png';
 
 type AuthMode = 'login' | 'signup';
@@ -22,6 +23,7 @@ export function AuthPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -39,6 +41,12 @@ export function AuthPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (password !== confirmPassword) {
+      setMessage('Password dan konfirmasi password harus sama.');
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage(null);
 
@@ -88,8 +96,12 @@ export function AuthPage() {
 
         <section className="flex min-h-screen items-center justify-center px-6 py-10">
           <div className="w-full max-w-[440px] rounded-lg border border-border bg-white px-8 py-8 shadow-sm">
-            <div className="mx-auto mb-7 flex h-12 max-w-[260px] items-center justify-center rounded-lg bg-muted px-4 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-foreground">
-              Logo FYP Foundation
+            <div className="mx-auto mb-7 flex h-16 max-w-[260px] items-center justify-center">
+              <img
+                src={logoImage}
+                alt="Logo FYP Foundation"
+                className="h-full w-auto object-contain"
+              />
             </div>
 
             <div className="mb-7 grid grid-cols-2 border-b border-border text-sm font-semibold text-foreground">
@@ -162,13 +174,28 @@ export function AuthPage() {
                 </button>
               </label>
 
-              {mode === 'login' && (
-                <div className="text-right">
-                  <button type="button" className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:text-primary hover:underline">
-                    Lupa password?
-                  </button>
-                </div>
-              )}
+              <label className="relative block">
+                <span className="sr-only">Konfirmasi Password</span>
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type={isPasswordVisible ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-border pl-11 pr-11 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  placeholder="Konfirmasi password"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordVisible((visible) => !visible)}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  aria-label={isPasswordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
+                  aria-pressed={isPasswordVisible}
+                >
+                  {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </label>
 
               {(authError || message) && (
                 <div className={`rounded-lg px-4 py-3 text-sm ${authError ? 'bg-red-50 text-red-700' : 'bg-secondary text-primary'}`}>

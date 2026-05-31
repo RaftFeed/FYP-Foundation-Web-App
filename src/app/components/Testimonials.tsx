@@ -14,59 +14,69 @@ interface Testimonial {
 const testimonials: Testimonial[] = [
   {
     id: 1,
-    name: 'Aliyah Putri',
+    name: 'Topiq Sadri',
     role: 'Mahasiswa PPKU IPB',
     achievement: 'Nilai: C → A',
-    text: 'Tutor di sini sangat responsif dan menjelaskan dengan detail. Saya yang tadinya struggle dengan Kalkulus sekarang malah bisa tutor temen-temen. Highly recommended!',
+    text: 'Dari yang awalnya bingung dengan materi dasar, sekarang saya jauh lebih pede ikut kelas. Penjelasan tutornya runtut, sabar, dan mudah dipahami.',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face',
+    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=faces',
     verified: true,
   },
   {
     id: 2,
-    name: 'Muhammad Riza',
+    name: 'Tapip Ilmany',
     role: 'Mahasiswa PPKU IPB',
     achievement: 'Lulus dengan IP 3.8',
-    text: 'Platform ini benar-benar membantu saya organize belajar. Bisa pilih tutor sesuai kebutuhan, fleksibel, dan hasilnya terukur. Investasi terbaik semester ini!',
+    text: 'Saya suka karena jadwalnya fleksibel dan alurnya jelas. Tinggal pilih kelas, belajar, lalu progresnya terasa nyata dari minggu ke minggu.',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
+    image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop&crop=faces',
     verified: true,
   },
   {
     id: 3,
-    name: 'Sinta Dewi',
+    name: 'Cacan Agung',
     role: 'Mahasiswa PPKU IPB',
     achievement: 'GPA Meningkat 0.5',
-    text: 'Groupnya supportif, tutornya profesional, dan sistemnya transparan. Tidak ada hidden cost atau kompromi kualitas. Perfect untuk mahasiswa PPKU!',
+    text: 'Belajar bareng jadi lebih terarah, dan grupnya juga suportif. Rasanya lebih gampang konsisten karena materinya disusun rapi.',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face',
+    image: 'https://images.unsplash.com/photo-1504593811423-6dd665756598?w=200&h=200&fit=crop&crop=faces',
     verified: true,
   },
   {
     id: 4,
-    name: 'Budi Santoso',
+    name: 'Parel Alparezi',
     role: 'Mahasiswa PPKU IPB',
     achievement: 'Predikat Cum Laude',
-    text: 'Kualitas terjamin, tutor2nya qualified dan punya track record bagus. Dapat value lebih dari yang diharapkan untuk setiap rupiah yang dikeluarkan.',
+    text: 'Materinya padat tapi tetap enak diikuti. Saya merasa lebih siap menghadapi ujian karena pembahasannya fokus ke inti soal.',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face',
+    image: 'https://images.unsplash.com/photo-1504257432389-52343af06ae3?w=200&h=200&fit=crop&crop=faces',
     verified: true,
   },
   {
     id: 5,
-    name: 'Budi Santoso',
+    name: 'Bejonaldo Rezon',
     role: 'Mahasiswa PPKU IPB',
     achievement: 'Predikat Cum Laude',
-    text: 'Kualitas terjamin, tutor2nya qualified dan punya track record bagus. Dapat value lebih dari yang diharapkan untuk setiap rupiah yang dikeluarkan.',
+    text: 'Yang paling membantu buat saya itu pembahasan yang step-by-step. Jadi bukan cuma paham hasil, tapi juga ngerti cara mikirnya.',
     rating: 5,
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face',
+    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=faces',
+    verified: true,
+  },
+  {
+    id: 6,
+    name: 'Apta Elpario',
+    role: 'Mahasiswa PPKU IPB',
+    achievement: 'Predikat Cum Laude',
+    text: 'Platformnya rapi dan tutornya komunikatif. Saya jadi lebih tenang karena semua kebutuhan belajar ada di satu tempat.',
+    rating: 5,
+    image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=200&h=200&fit=crop&crop=faces',
     verified: true,
   },
 ];
 
 export function Testimonials() {
   return (
-    <section className="py-16 bg-gradient-to-b from-white to-secondary/30">
+    <section id="testimoni" className="py-16 bg-gradient-to-b from-white to-secondary/30">
       <div className="max-w-7xl mx-auto px-4 md:px-5">
         <div className="mb-10 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -118,7 +128,7 @@ export function Testimonials() {
 
                 <Quote className="mb-2 h-5 w-5 text-primary/20" aria-hidden="true" />
 
-                <p className="mb-4 min-h-[108px] text-sm leading-relaxed text-foreground">
+                <p className="mb-1 min-h-[108px] text-sm leading-relaxed text-foreground">
                   "{testimonial.text}"
                 </p>
 
