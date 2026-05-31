@@ -228,6 +228,7 @@ export interface TutorSelfProfile {
   hourly_rate: number;
   image_url: string | null;
   status: 'pending' | 'approved' | 'rejected';
+  created_at?: string;
 }
 
 function throwIfError(error: { message: string } | null) {
@@ -787,7 +788,7 @@ export async function fetchMyPaymentStatus(lobbyId: string): Promise<'pending' |
 export async function fetchMyTutorProfile(userId: string) {
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, user_id, subject_id, full_name, bio, hourly_rate, image_url, status')
+    .select('id, user_id, subject_id, full_name, bio, hourly_rate, image_url, status, created_at')
     .eq('user_id', userId)
     .maybeSingle();
 
