@@ -8,6 +8,7 @@ export interface Profile {
   id: string;
   email: string | null;
   full_name: string | null;
+  image_url: string | null;
   role: UserRole;
   created_at: string;
 }
@@ -302,7 +303,7 @@ export async function fetchAdminBookings(): Promise<Booking[]> {
 export async function fetchProfiles() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, created_at')
+    .select('id, email, full_name, image_url, role, created_at')
     .order('created_at', { ascending: false });
 
   throwIfError(error);
@@ -312,7 +313,7 @@ export async function fetchProfiles() {
 export async function fetchProfileById(id: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, created_at')
+    .select('id, email, full_name, image_url, role, created_at')
     .eq('id', id)
     .maybeSingle();
 
@@ -387,7 +388,7 @@ export async function updateProfileRole(id: string, role: UserRole) {
 
 export async function updateProfileDetails(
   id: string,
-  updates: { full_name?: string; }
+  updates: { full_name?: string; image_url?: string | null; }
 ) {
   const { data, error } = await supabase
     .from('profiles')

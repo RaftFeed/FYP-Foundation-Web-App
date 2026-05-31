@@ -1,5 +1,5 @@
-import { Banknote, CalendarDays, Clock3, Copy, Lock, Search, Users } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Banknote, CalendarDays, ChevronLeft, ChevronRight, Clock3, Copy, Lock, Search, Timer, Users } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
@@ -12,6 +12,7 @@ import {
   fetchMatchmakingLobbies,
   joinMatchmakingLobby,
 } from '../../lib/matchmakingData';
+import { useLobbyRealtime } from '../../lib/useLobbyRealtime';
 import { LobbyDetailModal } from './ui/tutor-dashboard/SlotCard';
 import { formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
 
@@ -24,17 +25,69 @@ const statusLabels: Record<MatchmakingLobby['status'], string> = {
   completed: 'Selesai',
 };
 
+function LobbyCountdown({ expiresAt }: { expiresAt: string }) {
+  const computeRemaining = useCallback(() => {
+    return Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  }, [expiresAt]);
+
+  const [remaining, setRemaining] = useState(computeRemaining);
+
+  useEffect(() => {
+    setRemaining(computeRemaining());
+    const interval = window.setInterval(() => {
+      setRemaining(computeRemaining());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [computeRemaining]);
+
+  if (remaining <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600">
+        <Timer className="h-3.5 w-3.5" />
+        Waktu habis
+      </span>
+    );
+  }
+
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  const isUrgent = remaining < 3600;
+  const label = hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums ${
+        isUrgent ? 'text-red-600 animate-pulse' : 'text-amber-600'
+      }`}
+    >
+      <Timer className="h-3.5 w-3.5" />
+      {label}
+    </span>
+  );
+}
+
 const initialForm = {
   availabilitySlotId: '',
   title: '',
   description: '',
   visibility: 'public' as MatchmakingLobbyVisibility,
-  minParticipants: 2,
-  maxParticipants: 4,
+  minParticipants: 1,
+  maxParticipants: 10,
   timerHours: 6,
 };
 
-export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => void }) {
+export function MatchmakingLobbyView({
+  onLobbyChange,
+  initialSlotId,
+  onInitialSlotConsumed,
+}: {
+  onLobbyChange?: () => void;
+  initialSlotId?: string | null;
+  onInitialSlotConsumed?: () => void;
+}) {
   const { user } = useAuth();
   const stateKeyPrefix = user ? `matchmaking:${user.id}` : null;
   const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
@@ -129,7 +182,21 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
     });
   }, [availableLobbies, searchQuery, selectedDate, selectedSubject, selectedTutor]);
 
-  const loadData = async () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedSubject, selectedDate, selectedTutor]);
+
+  const totalPages = Math.ceil(filteredLobbies.length / ITEMS_PER_PAGE);
+
+  const paginatedLobbies = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLobbies.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredLobbies, currentPage]);
+
+  const loadData = useCallback(async () => {
     if (!user) {
       return;
     }
@@ -164,11 +231,29 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
+  // Initial fetch
   useEffect(() => {
     void loadData();
-  }, [user?.id]);
+  }, [loadData]);
+
+  // Subscribe to realtime changes — auto-refresh when lobbies or members change
+  useLobbyRealtime(loadData);
+
+  useEffect(() => {
+    if (initialSlotId && slots.length > 0) {
+      const slotExists = slots.some((slot) => slot.id === initialSlotId);
+      if (slotExists) {
+        setForm((current) => ({
+          ...current,
+          availabilitySlotId: initialSlotId,
+        }));
+        setActiveModal('create');
+      }
+      onInitialSlotConsumed?.();
+    }
+  }, [initialSlotId, slots, onInitialSlotConsumed, setForm]);
 
   useEffect(() => {
     if (!selectedSlot) {
@@ -336,11 +421,40 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-sm">
+            {isLoading && (
+              <div className="divide-y divide-primary/5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-muted" />
+                          <div className="space-y-1.5">
+                            <div className="h-4 w-32 rounded bg-muted" />
+                            <div className="h-3 w-20 rounded bg-muted" />
+                          </div>
+                        </div>
+                        <div className="h-5 w-48 rounded bg-muted" />
+                        <div className="flex gap-4">
+                          <div className="h-3 w-28 rounded bg-muted" />
+                          <div className="h-3 w-24 rounded bg-muted" />
+                          <div className="h-3 w-16 rounded bg-muted" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 lg:w-36">
+                        <div className="h-5 w-24 rounded bg-muted" />
+                        <div className="h-8 w-28 rounded-lg bg-muted" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {!isLoading && filteredLobbies.length === 0 && (
               <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada lobby public yang bisa kamu ikuti sekarang.</div>
             )}
             {!isLoading &&
-              filteredLobbies.map((lobby) => (
+              paginatedLobbies.map((lobby) => (
                 <LobbyCard
                   key={lobby.id}
                   lobby={lobby}
@@ -350,6 +464,13 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
                   onShowDetail={() => setActiveLobbyDetail(lobby)}
                 />
               ))}
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredLobbies.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+            />
           </div>
         </div>
       </div>
@@ -420,20 +541,20 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
                 onChange={(event) => setForm({ ...form, timerHours: Number(event.target.value) })}
                 className="h-11 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               >
-                <option value="3">3 jam</option>
-                <option value="6">6 jam</option>
-                <option value="12">12 jam</option>
-                <option value="24">24 jam</option>
+                <option value="24">1 hari</option>
+                <option value="48">2 hari</option>
+                <option value="72">3 hari</option>
+                <option value="168">7 hari</option>
               </select>
             </label>
           </div>
 
           <div className="mb-4 grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-foreground">Minimal</span>
+              <span className="mb-1 block text-sm font-semibold text-foreground">Minimal Peserta</span>
               <input
                 type="number"
-                min={2}
+                min={1}
                 max={form.maxParticipants}
                 value={form.minParticipants}
                 onChange={(event) => setForm({ ...form, minParticipants: Number(event.target.value) })}
@@ -441,7 +562,7 @@ export function MatchmakingLobbyView({ onLobbyChange }: { onLobbyChange?: () => 
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-foreground">Maksimal</span>
+              <span className="mb-1 block text-sm font-semibold text-foreground">Maksimal Peserta</span>
               <input
                 type="number"
                 min={form.minParticipants}
@@ -561,6 +682,9 @@ function LobbyCard({
             <Users className="h-4 w-4 text-primary" />
             {memberCountLabel}
           </span>
+          {lobby.status === 'open' && (
+            <LobbyCountdown expiresAt={lobby.expires_at} />
+          )}
         </div>
 
         {lobby.description && <p className="mt-4 rounded-xl bg-secondary p-3 text-sm font-medium text-muted-foreground">{lobby.description}</p>}
@@ -569,6 +693,11 @@ function LobbyCard({
       <div className="flex flex-col justify-between gap-3 border-t border-primary/10 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
         <div>
           <p className="text-sm font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
+          <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+            {lobby.price_per_member !== lobby.price_if_full && (
+              <><span className="text-green-600">{formatCurrency(lobby.price_if_full)}</span> jika penuh</>
+            )}
+          </p>
           <p className="mt-1 text-xs font-medium text-muted-foreground">Kode Kelas</p>
           <button
             type="button"
@@ -689,4 +818,92 @@ async function copyLobbyCode(code: string) {
   } catch {
     return false;
   }
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  const startRange = (currentPage - 1) * itemsPerPage + 1;
+  const endRange = Math.min(currentPage * itemsPerPage, totalItems);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      let start = Math.max(1, currentPage - 2);
+      let end = Math.min(totalPages, currentPage + 2);
+      
+      if (start === 1) {
+        end = 5;
+      } else if (end === totalPages) {
+        start = totalPages - 4;
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-between gap-4 border-t border-primary/10 bg-white px-6 py-4 sm:flex-row">
+      <p className="text-sm font-medium text-muted-foreground">
+        Menampilkan <span className="font-semibold text-foreground">{startRange}</span>-
+        <span className="font-semibold text-foreground">{endRange}</span> dari{" "}
+        <span className="font-semibold text-foreground">{totalItems}</span> lobby
+      </p>
+      
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={currentPage === 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          className="inline-flex h-9 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Sebelumnya
+        </button>
+
+        {getPageNumbers().map((page) => (
+          <button
+            key={page}
+            type="button"
+            onClick={() => onPageChange(page)}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold transition ${
+              currentPage === page
+                ? "bg-primary text-white shadow-sm"
+                : "border border-primary/10 bg-white text-primary hover:bg-secondary"
+            }`}
+          >
+            {page}
+          </button>
+        ))}
+
+        <button
+          type="button"
+          disabled={currentPage === totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          className="inline-flex h-9 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          Selanjutnya
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
 }

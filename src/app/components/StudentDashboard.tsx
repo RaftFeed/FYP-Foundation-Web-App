@@ -1,4 +1,5 @@
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, CircleCheck, Clock3, Home, LogOut, MapPin, NotebookTabs, Search, Settings, SquarePen, UserRound, Users } from 'lucide-react';
+import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, CircleCheck, Clock3, Home, LogOut, MapPin, NotebookTabs, RefreshCcw, Search, Settings, SquarePen, UserRound, Users } from 'lucide-react';
+import logoUrl from '../../img/FYP_no_bg.png';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { MatchmakingLobbyView } from './MatchmakingLobbyView';
@@ -11,12 +12,7 @@ import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
 import { ProfileView } from './ui/student-dashboard/ProfileView';
 import { SettingsView } from './ui/student-dashboard/SettingsView';
 import {
-  Booking,
-  BookingStatus,
-  bookingStatusLabel,
-  cancelBooking,
   fetchProfileById,
-  fetchMyBookings,
   fetchSubjectMatchmakingSummaries,
   formatCurrency,
   formatDate,
@@ -33,7 +29,6 @@ import {
   fetchStudentTutorScheduleSlots,
   leaveMatchmakingLobby,
 } from '../../lib/matchmakingData';
-import { updateBookingStatus } from '../../lib/dashboardData';
 
 export type StudentView = 'dashboard' | 'courses' | 'lobbies' | 'bookings' | 'schedule' | 'profile' | 'settings';
 type BookingTab = 'Semua' | 'Mendatang' | 'Selesai' | 'Dibatalkan' | 'Menunggu Pembayaran';
@@ -48,13 +43,6 @@ const navigation = [
   { label: 'Pengaturan', icon: Settings, view: 'settings' },
 ] satisfies Array<{ label: string; icon: typeof Home; view: StudentView }>;
 
-const bookingTabs: BookingTab[] = ['Semua', 'Mendatang', 'Selesai', 'Dibatalkan', 'Menunggu Pembayaran'];
-const bookingStatusesByTab: Record<Exclude<BookingTab, 'Semua'>, BookingStatus[]> = {
-  Mendatang: ['upcoming'],
-  Selesai: ['completed'],
-  Dibatalkan: ['cancelled'],
-  'Menunggu Pembayaran': ['pending_payment'],
-};
 const lobbyStatusesByTab: Record<Exclude<BookingTab, 'Semua'>, MatchmakingLobbyStatus[]> = {
   Mendatang: ['open', 'paid'],
   Selesai: ['completed'],
@@ -87,7 +75,6 @@ export function StudentDashboard() {
   const [availableTutorSlots, setAvailableTutorSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [scheduleTutorSlots, setScheduleTutorSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [subjects, setSubjects] = useState<SubjectMatchmakingSummary[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [joinedLobbies, setJoinedLobbies] = useState<MatchmakingLobby[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -95,8 +82,19 @@ export function StudentDashboard() {
   const [isSavingName, setIsSavingName] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadDashboard();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  const [pendingLobbySlotId, setPendingLobbySlotId] = useState<string | null>(null);
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
-  const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+  const avatarUrl = profile?.image_url || user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   const showNotice = (tone: NoticeModalState['tone'], message: string) => {
     setNotice({ tone, message });
@@ -112,7 +110,6 @@ export function StudentDashboard() {
       availableTutorSlots: TutorAvailabilitySlot[];
       scheduleTutorSlots: TutorAvailabilitySlot[];
       subjects: SubjectMatchmakingSummary[];
-      bookings: Booking[];
       joinedLobbies: MatchmakingLobby[];
       profile: Profile | null;
     }>(cacheKey);
@@ -121,7 +118,6 @@ export function StudentDashboard() {
       setAvailableTutorSlots(cachedData.availableTutorSlots);
       setScheduleTutorSlots(cachedData.scheduleTutorSlots);
       setSubjects(cachedData.subjects);
-      setBookings(cachedData.bookings);
       setJoinedLobbies(cachedData.joinedLobbies);
       setProfile(cachedData.profile);
       setIsLoading(false);
@@ -130,11 +126,10 @@ export function StudentDashboard() {
     }
 
     try {
-      const [nextAvailableTutorSlots, nextScheduleTutorSlots, nextSubjects, nextBookings, nextLobbies, nextProfile] = await Promise.all([
+      const [nextAvailableTutorSlots, nextScheduleTutorSlots, nextSubjects, nextLobbies, nextProfile] = await Promise.all([
         fetchAvailableTutorSlots(),
         fetchStudentTutorScheduleSlots(),
         fetchSubjectMatchmakingSummaries(),
-        fetchMyBookings(user.id),
         fetchMatchmakingLobbies(),
         fetchProfileById(user.id),
       ]);
@@ -142,7 +137,6 @@ export function StudentDashboard() {
       setAvailableTutorSlots(nextAvailableTutorSlots);
       setScheduleTutorSlots(nextScheduleTutorSlots);
       setSubjects(nextSubjects);
-      setBookings(nextBookings);
       setJoinedLobbies(nextJoinedLobbies);
       setProfile(nextProfile);
 
@@ -150,7 +144,6 @@ export function StudentDashboard() {
         availableTutorSlots: nextAvailableTutorSlots,
         scheduleTutorSlots: nextScheduleTutorSlots,
         subjects: nextSubjects,
-        bookings: nextBookings,
         joinedLobbies: nextJoinedLobbies,
         profile: nextProfile,
       });
@@ -167,36 +160,32 @@ export function StudentDashboard() {
 
 
 
-  const handleCancel = async (bookingId: string) => {
-    setNotice(null);
-    try {
-      await cancelBooking(bookingId);
-      showNotice('success', 'Booking dibatalkan.');
-      await loadDashboard();
-    } catch (error) {
-      showNotice('error', error instanceof Error ? error.message : 'Gagal membatalkan booking.');
-    }
-  };
-
   const handleAvatarUpload = async (file: File) => {
     if (!user) return;
     setIsUploadingAvatar(true);
     setNotice(null);
     try {
       const { uploadAvatar } = await import('../../lib/storage');
+      const { updateProfileDetails } = await import('../../lib/dashboardData');
+      const { supabase } = await import('../../lib/supabase');
+
       const newAvatarUrl = await uploadAvatar(file, user.id);
 
-      const { supabase } = await import('../../lib/supabase');
-      await supabase.auth.updateUser({
-        data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
-      });
+      await Promise.all([
+        updateProfileDetails(user.id, { image_url: newAvatarUrl }),
+        supabase.auth.updateUser({
+          data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
+        }),
+      ]);
+
+      await loadDashboard();
       showNotice('success', 'Foto profil berhasil diperbarui.');
-      await loadDashboard(); // To refetch session or profiles if needed
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui foto profil.');
     } finally {
       setIsUploadingAvatar(false);
     }
+
   };
 
   const handleProfileSave = async () => {
@@ -245,8 +234,12 @@ export function StudentDashboard() {
       <div className="grid min-h-screen lg:grid-cols-[248px_1fr]">
         <aside className="border-b border-primary/10 bg-white px-4 py-5 shadow-sm lg:border-b-0 lg:border-r">
           <div className="mb-7 flex items-center justify-between lg:block">
-            <div className="flex h-12 w-32 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-white shadow-sm">
-              FYP<span className="text-accent">&nbsp;Foundation</span>
+            <div className="flex h-14 items-center justify-start gap-2.5 rounded-lg bg-primary px-3.5 shadow-sm">
+              <img src={logoUrl} alt="Logo" className="h-9 w-9 object-contain shrink-0" />
+              <div className="flex flex-col text-left font-extrabold leading-none gap-0.5">
+                <span className="text-white text-base">FYP</span>
+                <span className="text-accent text-[11px] uppercase tracking-wider">Foundation</span>
+              </div>
             </div>
           </div>
 
@@ -278,11 +271,20 @@ export function StudentDashboard() {
             <div className="flex items-center gap-4">
               <button
                 type="button"
+                onClick={() => void handleRefresh()}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/10 bg-white text-primary shadow-sm hover:bg-secondary"
+                aria-label="Refresh"
+              >
+                <RefreshCcw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
+
+              <button
+                type="button"
                 className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-primary/10 bg-white text-primary shadow-sm hover:bg-secondary"
                 aria-label="Notifications"
               >
                 <Bell className="h-6 w-6" />
-                {bookings.some((booking) => booking.status === 'pending_payment') && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />}
+                {joinedLobbies.some((lobby) => lobby.status === 'pending_payment' && !lobby.current_user_has_paid) && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />}
               </button>
 
               <div className="relative flex items-center gap-3">
@@ -359,26 +361,38 @@ export function StudentDashboard() {
           </header>
 
           {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} />}
-          {activeView === 'lobbies' && <MatchmakingLobbyView onLobbyChange={() => void loadDashboard()} />}
+          {activeView === 'lobbies' && (
+            <MatchmakingLobbyView
+              onLobbyChange={() => void loadDashboard()}
+              initialSlotId={pendingLobbySlotId}
+              onInitialSlotConsumed={() => setPendingLobbySlotId(null)}
+            />
+          )}
           {activeView === 'bookings' && (
             <BookingsView
-              bookings={bookings}
               joinedLobbies={joinedLobbies}
-              onCancel={handleCancel}
               onLeaveLobby={handleLeaveLobby}
-              onPay={async (bookingId: string) => {
-                try {
-                  await updateBookingStatus(bookingId, 'upcoming');
-                  showNotice('success', 'Pembayaran berhasil. Status booking telah diperbarui.');
-                  await loadDashboard();
-                } catch (error) {
-                  showNotice('error', 'Gagal memproses pembayaran.');
-                }
+              onPaySuccess={async () => {
+                showNotice('success', 'Pembayaran berhasil! Status kelas telah diperbarui.');
+                await loadDashboard();
               }}
+              onPayError={(errorMsg: string) => {
+                showNotice('error', errorMsg);
+              }}
+              onRefresh={loadDashboard}
               stateKeyPrefix={stateKeyPrefix}
             />
           )}
-          {activeView === 'schedule' && <TutorScheduleView slots={scheduleTutorSlots} isStudentView />}
+          {activeView === 'schedule' && (
+            <TutorScheduleView
+              slots={scheduleTutorSlots}
+              isStudentView
+              onCreateLobby={(slotId) => {
+                setPendingLobbySlotId(slotId);
+                setActiveView('lobbies');
+              }}
+            />
+          )}
           {activeView === 'settings' && <SettingsView showNotice={showNotice} />}
           {activeView === 'profile' && (
             <ProfileView
@@ -393,7 +407,7 @@ export function StudentDashboard() {
             />
           )}
           {activeView === 'dashboard' && (
-            <DashboardView bookings={bookings} displayName={displayName} availableTutorSlots={availableTutorSlots} setActiveView={setActiveView} />
+            <DashboardView joinedLobbies={joinedLobbies} displayName={displayName} availableTutorSlots={availableTutorSlots} setActiveView={setActiveView} />
           )}
         </main>
       </div>

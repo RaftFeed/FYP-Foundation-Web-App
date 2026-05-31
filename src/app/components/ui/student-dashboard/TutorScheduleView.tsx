@@ -38,7 +38,15 @@ function formatCalendarHeading(dateKey: string) {
   }).format(new Date(year, month - 1, day));
 }
 
-export function TutorScheduleView({ slots, isStudentView }: { slots: TutorAvailabilitySlot[]; isStudentView?: boolean }) {
+export function TutorScheduleView({
+  slots,
+  isStudentView,
+  onCreateLobby,
+}: {
+  slots: TutorAvailabilitySlot[];
+  isStudentView?: boolean;
+  onCreateLobby?: (slotId: string) => void;
+}) {
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const seedDate = slots[0]?.starts_at ? new Date(slots[0].starts_at) : today;
@@ -80,7 +88,7 @@ export function TutorScheduleView({ slots, isStudentView }: { slots: TutorAvaila
         }
         setSlotLobbyMap(map);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => { cancelled = true; };
   }, [isStudentView]);
 
@@ -241,19 +249,17 @@ export function TutorScheduleView({ slots, isStudentView }: { slots: TutorAvaila
                     setHoverPos(null);
                     setHoveredDateKey(null);
                   }}
-                  className={`relative border-b border-r border-primary/10 p-2 text-left align-top transition ${
-                    day.isCurrentMonth
+                  className={`relative border-b border-r border-primary/10 p-2 text-left align-top transition ${day.isCurrentMonth
                       ? isSelected
                         ? 'bg-primary/[0.08] ring-1 ring-inset ring-primary/30'
                         : 'bg-white hover:bg-secondary/40'
                       : 'bg-secondary/30 text-muted-foreground/70'
-                  } ${hasSessions ? 'cursor-pointer' : ''}`}
+                    } ${hasSessions ? 'cursor-pointer' : ''}`}
                 >
                   <div className="flex items-center justify-between">
                     <span
-                      className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${
-                        isToday ? 'bg-primary text-white' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'
-                      }`}
+                      className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${isToday ? 'bg-primary text-white' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'
+                        }`}
                     >
                       {day.date.getDate()}
                     </span>
@@ -310,6 +316,7 @@ export function TutorScheduleView({ slots, isStudentView }: { slots: TutorAvaila
                       slot={session}
                       onViewStudents={isStudentView ? undefined : setStudentModalSlot}
                       onViewLobby={lobby ? () => setLobbyDetailTarget(lobby) : undefined}
+                      onCreateLobby={isStudentView && !lobby ? onCreateLobby : undefined}
                       showCancel={false}
                     />
                   );
