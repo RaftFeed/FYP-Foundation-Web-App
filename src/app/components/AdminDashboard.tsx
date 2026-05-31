@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, ChevronDown, FileBarChart, GraduationCap, Home, LogOut, RefreshCcw, Save, Settings, ShieldCheck, SquarePen, Trash2, UserRound, Users, X } from 'lucide-react';
+import { BookOpen, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye, FileBarChart, GraduationCap, Home, List, LogOut, RefreshCcw, Save, Settings, ShieldCheck, SquarePen, Trash2, UserRound, Users, X } from 'lucide-react';
 import logoUrl from '../../img/FYP_no_bg.png';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -24,9 +24,24 @@ import {
   upsertTutorProfile,
 } from '../../lib/dashboardData';
 import { supabase } from '../../lib/supabase';
-import { TutorAvailabilitySlot, MatchmakingLobby, fetchAdminTutorAvailability, fetchMatchmakingLobbies } from '../../lib/matchmakingData';
-import { Report, fetchReports } from '../../lib/paymentsReports';
+import { TutorAvailabilitySlot, MatchmakingLobby, fetchAdminTutorAvailability, fetchLobbyStudents, fetchMatchmakingLobbies, SlotStudent } from '../../lib/matchmakingData';
+import { Report, fetchReports, PaidPayment, fetchPaidPayments } from '../../lib/paymentsReports';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend);
 
 type AdminTab = 'dashboard' | 'sessions' | 'tutors' | 'subjects' | 'bookings' | 'users' | 'reports' | 'profile' | 'settings';
 
@@ -69,6 +84,7 @@ export function AdminDashboard() {
   const [lobbies, setLobbies] = useState<MatchmakingLobby[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [paidPayments, setPaidPayments] = useState<PaidPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [subjectForm, setSubjectForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:subject-form` : null, emptySubject);
@@ -132,13 +148,14 @@ export function AdminDashboard() {
     }
 
     try {
-      const [nextSubjects, nextTutors, nextSlots, nextLobbies, nextProfiles, nextReports] = await Promise.all([
+      const [nextSubjects, nextTutors, nextSlots, nextLobbies, nextProfiles, nextReports, nextPaidPayments] = await Promise.all([
         fetchSubjects(),
         fetchTutorProfiles(),
         fetchAdminTutorAvailability(),
         fetchMatchmakingLobbies(),
         fetchProfiles(),
         fetchReports(),
+        fetchPaidPayments().catch(() => [] as PaidPayment[]),
       ]);
       setSubjects(nextSubjects);
       setTutors(nextTutors);
@@ -146,6 +163,7 @@ export function AdminDashboard() {
       setLobbies(nextLobbies);
       setProfiles(nextProfiles);
       setReports(nextReports);
+      setPaidPayments(nextPaidPayments);
       if (cacheKey) {
         writeLocalCache(cacheKey, {
           subjects: nextSubjects,
@@ -478,7 +496,7 @@ export function AdminDashboard() {
             />
           )}
 
-          {activeTab === 'reports' && <ReportsPanel reports={reports} />}
+          {activeTab === 'reports' && <ReportsPanel reports={reports} paidPayments={paidPayments} />}
           {activeTab === 'profile' && (
             <ProfileView
               profileForm={profileForm}
@@ -519,24 +537,76 @@ function SubjectsPanel({
   onSubmit: (event: FormEvent) => void;
   subjects: Subject[];
 }) {
-  return (
-    <section className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
-      <AdminForm title={editingId ? 'Edit Subject' : 'Add Subject'} onSubmit={onSubmit} onCancel={editingId ? onCancel : undefined}>
-        <TextInput label="Name" value={form.name} onChange={(value) => onChange({ ...form, name: value })} required />
-        <TextInput label="Code" value={form.code} onChange={(value) => onChange({ ...form, code: value })} />
-        <TextArea label="Description" value={form.description} onChange={(value) => onChange({ ...form, description: value })} />
-      </AdminForm>
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-      <DataTable headers={['Name', 'Code', 'Description', 'Actions']}>
+  const handleOpenAdd = () => {
+    onCancel();
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (subject: Subject) => {
+    onEdit(subject);
+    setIsModalOpen(true);
+  };
+
+  const handleClose = () => {
+    setIsModalOpen(false);
+    onCancel();
+  };
+
+  return (
+    <section className="mt-6">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <p className="text-sm font-medium text-muted-foreground">{subjects.length} mata kuliah terdaftar</p>
+        <button
+          type="button"
+          onClick={handleOpenAdd}
+          className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition"
+        >
+          <BookOpen className="h-4 w-4" />
+          Tambah Mata Kuliah
+        </button>
+      </div>
+
+      <DataTable headers={['Nama', 'Kode', 'Deskripsi', 'Aksi']}>
         {subjects.map((subject) => (
           <tr key={subject.id}>
             <Cell strong>{subject.name}</Cell>
             <Cell>{subject.code}</Cell>
             <Cell>{subject.description}</Cell>
-            <ActionCell onEdit={() => onEdit(subject)} onDelete={() => onDelete(subject.id)} />
+            <ActionCell onEdit={() => handleOpenEdit(subject)} onDelete={() => onDelete(subject.id)} />
           </tr>
         ))}
       </DataTable>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-primary/10 bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <h2 className="text-xl font-extrabold text-foreground">{editingId ? 'Edit Mata Kuliah' : 'Tambah Mata Kuliah'}</h2>
+              <button type="button" onClick={handleClose} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Tutup">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={(e) => { onSubmit(e); if (!editingId) handleClose(); }}>
+              <div className="space-y-3">
+                <TextInput label="Nama" value={form.name} onChange={(value) => onChange({ ...form, name: value })} required />
+                <TextInput label="Kode" value={form.code} onChange={(value) => onChange({ ...form, code: value })} />
+                <TextArea label="Deskripsi" value={form.description} onChange={(value) => onChange({ ...form, description: value })} />
+              </div>
+              <div className="mt-5 flex gap-3 justify-end">
+                <button type="button" onClick={handleClose} className="h-10 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary hover:bg-secondary transition">
+                  Batal
+                </button>
+                <button type="submit" className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition">
+                  <Save className="h-4 w-4" />
+                  Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -671,69 +741,438 @@ function TutorEditModal({
 
 type AvailabilitySortKey = 'subject_name' | 'tutor_name' | 'starts_at' | 'location' | 'price_total' | 'max_participants' | 'status';
 
+type AvailabilityViewMode = 'table' | 'calendar';
+
+function getDateKey(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildCalendarDays(currentMonth: Date) {
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const mondayFirstOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(year, month, 1 - mondayFirstOffset);
+  const totalVisibleDays = mondayFirstOffset + lastDay.getDate();
+  const cellCount = Math.ceil(totalVisibleDays / 7) * 7;
+  return Array.from({ length: cellCount }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return { key: getDateKey(date), date, isCurrentMonth: date.getMonth() === month };
+  });
+}
+
+function formatCalendarHeading(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(year, month - 1, day));
+}
+
+const slotStatusLabels: Record<string, string> = {
+  available: 'Tersedia',
+  held: 'Lobby Terbuat',
+  booked: 'Terbooking',
+  cancelled: 'Dibatalkan',
+};
+
 function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
+  const [viewMode, setViewMode] = useState<AvailabilityViewMode>('table');
   const [sortKey, setSortKey] = useState<AvailabilitySortKey>('starts_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const today = useMemo(() => new Date(), []);
+  const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedTutor, setSelectedTutor] = useState('all');
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+
+  const subjectOptions = useMemo(
+    () => ['all', ...Array.from(new Set(slots.map((s) => s.subject_name))).sort((a, b) => a.localeCompare(b, 'id-ID'))],
+    [slots],
+  );
+  const tutorOptions = useMemo(
+    () => ['all', ...Array.from(new Set(slots.map((s) => s.tutor_name))).sort((a, b) => a.localeCompare(b, 'id-ID'))],
+    [slots],
+  );
+
+  const filteredSlots = useMemo(() => {
+    return slots.filter((slot) => {
+      if (selectedSubject !== 'all' && slot.subject_name !== selectedSubject) return false;
+      if (selectedTutor !== 'all' && slot.tutor_name !== selectedTutor) return false;
+      return true;
+    });
+  }, [selectedSubject, selectedTutor, slots]);
 
   const sortedSlots = useMemo(() => {
     const compare = (left: TutorAvailabilitySlot, right: TutorAvailabilitySlot) => {
       let result = 0;
-
       switch (sortKey) {
-        case 'subject_name':
-          result = left.subject_name.localeCompare(right.subject_name);
-          break;
-        case 'tutor_name':
-          result = left.tutor_name.localeCompare(right.tutor_name);
-          break;
-        case 'starts_at':
-          result = new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime();
-          break;
-        case 'location':
-          result = left.location.localeCompare(right.location);
-          break;
-        case 'price_total':
-          result = left.price_total - right.price_total;
-          break;
-        case 'max_participants':
-          result = left.max_participants - right.max_participants;
-          break;
-        case 'status':
-          result = left.status.localeCompare(right.status);
-          break;
+        case 'subject_name': result = left.subject_name.localeCompare(right.subject_name); break;
+        case 'tutor_name': result = left.tutor_name.localeCompare(right.tutor_name); break;
+        case 'starts_at': result = new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime(); break;
+        case 'location': result = left.location.localeCompare(right.location); break;
+        case 'price_total': result = left.price_total - right.price_total; break;
+        case 'max_participants': result = left.max_participants - right.max_participants; break;
+        case 'status': result = left.status.localeCompare(right.status); break;
       }
-
       return sortDirection === 'asc' ? result : -result;
     };
+    return [...filteredSlots].sort(compare);
+  }, [filteredSlots, sortDirection, sortKey]);
 
-    return [...slots].sort(compare);
-  }, [slots, sortDirection, sortKey]);
+  const monthSessions = useMemo(
+    () => filteredSlots.filter((slot) => {
+      const startsAt = new Date(slot.starts_at);
+      return startsAt.getFullYear() === currentMonth.getFullYear() && startsAt.getMonth() === currentMonth.getMonth();
+    }),
+    [currentMonth, filteredSlots],
+  );
+
+  const groupedByDay = useMemo(() => {
+    const groups = new Map<string, TutorAvailabilitySlot[]>();
+    for (const slot of monthSessions) {
+      const key = getDateKey(new Date(slot.starts_at));
+      const existing = groups.get(key) ?? [];
+      existing.push(slot);
+      groups.set(key, existing);
+    }
+    for (const entries of groups.values()) {
+      entries.sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime());
+    }
+    return groups;
+  }, [monthSessions]);
+
+  const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
+  const selectedDateSessions = selectedDateKey ? groupedByDay.get(selectedDateKey) ?? [] : [];
 
   const toggleSort = (nextSortKey: AvailabilitySortKey) => {
     if (nextSortKey === sortKey) {
       setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
       return;
     }
-
     setSortKey(nextSortKey);
     setSortDirection('asc');
   };
 
   const sortIndicator = (nextSortKey: AvailabilitySortKey) => {
-    if (nextSortKey !== sortKey) {
-      return <ChevronDown className="h-3 w-3 opacity-30" />;
-    }
-
+    if (nextSortKey !== sortKey) return <ChevronDown className="h-3 w-3 opacity-30" />;
     return <ChevronDown className={`h-3 w-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} />;
   };
 
   return (
     <section className="mt-6">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition ${viewMode === 'table' ? 'bg-primary text-white' : 'border border-primary/20 text-primary hover:bg-secondary'}`}
+          >
+            <List className="h-4 w-4" />
+            Tabel
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('calendar')}
+            className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition ${viewMode === 'calendar' ? 'bg-primary text-white' : 'border border-primary/20 text-primary hover:bg-secondary'}`}
+          >
+            <CalendarDays className="h-4 w-4" />
+            Kalender
+          </button>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border border-primary/10 bg-white px-3 py-2 text-sm font-semibold text-primary shadow-sm">
+          <span>{filteredSlots.length} slot</span>
+        </div>
+      </div>
+
+      {viewMode === 'table' && (
+        <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead className="bg-muted text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('subject_name')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Subject {sortIndicator('subject_name')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('tutor_name')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Tutor {sortIndicator('tutor_name')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('starts_at')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Jadwal {sortIndicator('starts_at')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('location')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Lokasi {sortIndicator('location')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('price_total')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Harga Total {sortIndicator('price_total')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('max_participants')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Kapasitas {sortIndicator('max_participants')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <button type="button" onClick={() => toggleSort('status')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                      Status {sortIndicator('status')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">Catatan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {sortedSlots.map((slot) => (
+                  <tr key={slot.id} className={new Date(slot.ends_at).getTime() < Date.now() ? 'bg-red-50/40' : ''}>
+                    <Cell strong>{slot.subject_name}</Cell>
+                    <Cell>{slot.tutor_name}</Cell>
+                    <Cell>{formatDate(slot.starts_at)} {formatTimeRange(slot.starts_at, slot.ends_at)}</Cell>
+                    <Cell>{slot.location}</Cell>
+                    <Cell>{formatCurrency(slot.price_total)}</Cell>
+                    <Cell>{slot.max_participants} siswa</Cell>
+                    <Cell>
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        slot.status === 'available' ? 'bg-emerald-50 text-emerald-700' :
+                        slot.status === 'held' ? 'bg-amber-50 text-amber-700' :
+                        slot.status === 'booked' ? 'bg-blue-50 text-blue-700' :
+                        new Date(slot.ends_at).getTime() < Date.now() ? 'bg-red-50 text-red-700' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {new Date(slot.ends_at).getTime() < Date.now() ? 'Kadaluarsa' : (slotStatusLabels[slot.status] ?? slot.status)}
+                      </span>
+                    </Cell>
+                    <Cell>{slot.notes ?? '-'}</Cell>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'calendar' && (
+        <div className="flex flex-col rounded-2xl border border-primary/10 bg-white p-3 shadow-md lg:p-4">
+          <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary" aria-label="Bulan sebelumnya">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 text-primary transition hover:bg-secondary" aria-label="Bulan berikutnya">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))} className="rounded-lg border border-primary/15 px-3 py-1.5 text-sm font-semibold text-foreground transition hover:bg-secondary">
+                {new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(currentMonth)}
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:w-[380px]">
+              <label className="block">
+                <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mata Kuliah</span>
+                <select value={selectedSubject} onChange={(event) => setSelectedSubject(event.target.value)} className="h-8 w-full rounded-lg border border-primary/15 bg-white px-2 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                  <option value="all">Semua Matkul</option>
+                  {subjectOptions.slice(1).map((subject) => (<option key={subject} value={subject}>{subject}</option>))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Tutor</span>
+                <select value={selectedTutor} onChange={(event) => setSelectedTutor(event.target.value)} className="h-8 w-full rounded-lg border border-primary/15 bg-white px-2 text-xs font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                  <option value="all">Semua Tutor</option>
+                  {tutorOptions.slice(1).map((tutor) => (<option key={tutor} value={tutor}>{tutor}</option>))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="relative flex flex-col rounded-2xl border border-primary/10">
+            <div className="grid grid-cols-7 border-b border-primary/10 bg-secondary/60 rounded-t-2xl">
+              {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((day) => (
+                <div key={day} className="px-2 py-1.5 text-center text-xs font-bold text-foreground">{day}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 flex-1">
+              {calendarDays.map((day) => {
+                const daySessions = groupedByDay.get(day.key) ?? [];
+                const isToday = day.key === getDateKey(today);
+                const isSelected = selectedDateKey === day.key;
+                const hasSessions = daySessions.length > 0;
+                return (
+                  <div
+                    key={day.key}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => hasSessions && setSelectedDateKey((prev) => (prev === day.key ? null : day.key))}
+                    onKeyDown={(e) => { if (hasSessions && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSelectedDateKey((prev) => (prev === day.key ? null : day.key)); } }}
+                    className={`relative border-b border-r border-primary/10 p-2 text-left align-top transition ${day.isCurrentMonth ? isSelected ? 'bg-primary/[0.08] ring-1 ring-inset ring-primary/30' : 'bg-white hover:bg-secondary/40' : 'bg-secondary/30 text-muted-foreground/70'} ${hasSessions ? 'cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${isToday ? 'bg-primary text-white' : isSelected ? 'bg-primary/15 text-primary' : 'text-foreground'}`}>
+                        {day.date.getDate()}
+                      </span>
+                      {hasSessions && (
+                        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">{daySessions.length}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedDateKey && (
+            <div className="mt-4 rounded-2xl border border-primary/15 bg-white p-5 shadow-lg">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{selectedDateSessions.length} Sesi</p>
+                  <h2 className="mt-1 text-xl font-extrabold text-foreground">{formatCalendarHeading(selectedDateKey)}</h2>
+                </div>
+                <button type="button" onClick={() => setSelectedDateKey(null)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Tutup panel">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {selectedDateSessions.length === 0 ? (
+                <p className="py-6 text-center text-sm font-medium text-muted-foreground">Tidak ada sesi pada tanggal ini.</p>
+              ) : (
+                <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+                  {selectedDateSessions.map((session) => (
+                    <article key={session.id} className={`rounded-xl border bg-white p-4 shadow-sm ${new Date(session.ends_at).getTime() < Date.now() ? 'border-red-200 bg-red-50/30' : 'border-primary/10'}`}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${
+                            session.status === 'available' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            session.status === 'held' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            session.status === 'booked' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            new Date(session.ends_at).getTime() < Date.now() ? 'bg-red-50 text-red-700 border-red-200' :
+                            'bg-muted text-muted-foreground border-border'
+                          }`}>
+                            {new Date(session.ends_at).getTime() < Date.now() ? 'Kadaluarsa' : (slotStatusLabels[session.status] ?? session.status)}
+                          </span>
+                          <span className="text-sm font-bold text-primary">{formatCurrency(session.price_total)}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{formatTimeRange(session.starts_at, session.ends_at)}</span>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">{session.subject_name} — {session.tutor_name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{session.location} · Maks {session.max_participants} siswa</p>
+                      {session.notes && <p className="mt-2 rounded-lg bg-secondary p-2 text-xs text-muted-foreground">{session.notes}</p>}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {monthSessions.length === 0 && (
+            <div className="mt-4 rounded-xl border border-primary/10 bg-secondary/30 px-4 py-3 text-sm font-medium text-muted-foreground">
+              Tidak ada slot pada bulan ini.
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+type LobbySortKey = 'title' | 'subject_name' | 'tutor_name' | 'member_count' | 'price_per_member' | 'status';
+
+function LobbyBookingsPanel({ lobbies }: { lobbies: MatchmakingLobby[] }) {
+  const [sortKey, setSortKey] = useState<LobbySortKey>('title');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [studentModalLobby, setStudentModalLobby] = useState<MatchmakingLobby | null>(null);
+  const [students, setStudents] = useState<SlotStudent[] | null>(null);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentError, setStudentError] = useState<string | null>(null);
+
+  const activeLobbies = useMemo(
+    () => lobbies.filter((lobby) => ['open', 'pending_payment', 'paid'].includes(lobby.status)),
+    [lobbies],
+  );
+
+  const sortedLobbies = useMemo(() => {
+    const compare = (left: MatchmakingLobby, right: MatchmakingLobby) => {
+      let result = 0;
+      switch (sortKey) {
+        case 'title':
+          result = left.title.localeCompare(right.title);
+          break;
+        case 'subject_name':
+          result = left.subject_name.localeCompare(right.subject_name);
+          break;
+        case 'tutor_name':
+          result = left.tutor_name.localeCompare(right.tutor_name);
+          break;
+        case 'member_count':
+          result = (left.member_count ?? 0) - (right.member_count ?? 0);
+          break;
+        case 'price_per_member':
+          result = left.price_per_member - right.price_per_member;
+          break;
+        case 'status':
+          result = left.status.localeCompare(right.status);
+          break;
+      }
+      return sortDirection === 'asc' ? result : -result;
+    };
+    return [...activeLobbies].sort(compare);
+  }, [activeLobbies, sortDirection, sortKey]);
+
+  const toggleSort = (nextSortKey: LobbySortKey) => {
+    if (nextSortKey === sortKey) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(nextSortKey);
+    setSortDirection('asc');
+  };
+
+  const sortIndicator = (nextSortKey: LobbySortKey) => {
+    if (nextSortKey !== sortKey) return <ChevronDown className="h-3 w-3 opacity-30" />;
+    return <ChevronDown className={`h-3 w-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} />;
+  };
+
+  const handleViewStudents = async (lobby: MatchmakingLobby) => {
+    setStudentModalLobby(lobby);
+    setLoadingStudents(true);
+    setStudentError(null);
+    setStudents(null);
+    try {
+      const data = await fetchLobbyStudents(lobby.id, lobby.tutor_user_id);
+      setStudents(data);
+    } catch (err) {
+      setStudentError(err instanceof Error ? err.message : 'Gagal memuat daftar siswa.');
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  const lobbyStatusLabels: Record<string, string> = {
+    open: 'Mencari Anggota',
+    pending_payment: 'Menunggu Pembayaran',
+    paid: 'Kelas Aktif',
+  };
+
+  return (
+    <section className="mt-6">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <p className="text-sm font-medium text-muted-foreground">{activeLobbies.length} lobby aktif</p>
+      </div>
       <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-muted text-muted-foreground">
               <tr>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('title')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Lobby {sortIndicator('title')}
+                  </button>
+                </th>
                 <th className="px-4 py-3 font-semibold">
                   <button type="button" onClick={() => toggleSort('subject_name')} className="flex items-center gap-1 font-semibold hover:text-primary">
                     Subject {sortIndicator('subject_name')}
@@ -745,23 +1184,13 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
                   </button>
                 </th>
                 <th className="px-4 py-3 font-semibold">
-                  <button type="button" onClick={() => toggleSort('starts_at')} className="flex items-center gap-1 font-semibold hover:text-primary">
-                    Schedule {sortIndicator('starts_at')}
+                  <button type="button" onClick={() => toggleSort('member_count')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Anggota {sortIndicator('member_count')}
                   </button>
                 </th>
                 <th className="px-4 py-3 font-semibold">
-                  <button type="button" onClick={() => toggleSort('location')} className="flex items-center gap-1 font-semibold hover:text-primary">
-                    Location {sortIndicator('location')}
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-semibold">
-                  <button type="button" onClick={() => toggleSort('price_total')} className="flex items-center gap-1 font-semibold hover:text-primary">
-                    Total Price {sortIndicator('price_total')}
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-semibold">
-                  <button type="button" onClick={() => toggleSort('max_participants')} className="flex items-center gap-1 font-semibold hover:text-primary">
-                    Capacity {sortIndicator('max_participants')}
+                  <button type="button" onClick={() => toggleSort('price_per_member')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Harga/Orang {sortIndicator('price_per_member')}
                   </button>
                 </th>
                 <th className="px-4 py-3 font-semibold">
@@ -769,18 +1198,177 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
                     Status {sortIndicator('status')}
                   </button>
                 </th>
+                <th className="px-4 py-3 font-semibold">Siswa</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {sortedSlots.map((slot) => (
-                <tr key={slot.id}>
-                  <Cell strong>{slot.subject_name}</Cell>
-                  <Cell>{slot.tutor_name}</Cell>
-                  <Cell>{formatDate(slot.starts_at)} {formatTimeRange(slot.starts_at, slot.ends_at)}</Cell>
-                  <Cell>{slot.location}</Cell>
-                  <Cell>{formatCurrency(slot.price_total)}</Cell>
-                  <Cell>{slot.max_participants} siswa</Cell>
-                  <Cell>{slot.status}</Cell>
+              {sortedLobbies.map((lobby) => (
+                <tr key={lobby.id}>
+                  <Cell strong>{lobby.title}</Cell>
+                  <Cell>{lobby.subject_name}</Cell>
+                  <Cell>{lobby.tutor_name}</Cell>
+                  <Cell>{lobby.member_count ?? 0}/{lobby.max_participants}</Cell>
+                  <Cell>{formatCurrency(lobby.price_per_member)}</Cell>
+                  <td className="px-4 py-4">
+                    <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                      lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
+                      lobby.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {lobbyStatusLabels[lobby.status] ?? lobby.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <button
+                      type="button"
+                      onClick={() => void handleViewStudents(lobby)}
+                      className="flex h-9 items-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary transition hover:bg-secondary"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Lihat Siswa
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {studentModalLobby && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4" onClick={() => setStudentModalLobby(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-primary/10 bg-white p-5 shadow-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-foreground">Daftar Siswa</h2>
+                <p className="mt-1 text-sm font-medium text-muted-foreground">
+                  {studentModalLobby.title} · {studentModalLobby.subject_name}
+                </p>
+                {studentModalLobby.description && (
+                  <p className="mt-1 text-xs text-muted-foreground italic">{studentModalLobby.description}</p>
+                )}
+              </div>
+              <button type="button" onClick={() => setStudentModalLobby(null)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Tutup">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto pr-1">
+              {loadingStudents && <div className="py-10 text-center text-sm font-medium text-muted-foreground">Memuat daftar siswa...</div>}
+              {!loadingStudents && studentError && <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">{studentError}</div>}
+              {!loadingStudents && students && students.length === 0 && <div className="py-10 text-center text-sm font-medium text-muted-foreground">Belum ada siswa yang bergabung.</div>}
+              {!loadingStudents && students && students.length > 0 && (
+                <div className="space-y-2">
+                  {students.map((s) => (
+                    <div key={s.student_id} className="flex items-center gap-3 rounded-lg border border-primary/10 bg-secondary/30 px-4 py-3">
+                      {s.student_image_url ? (
+                        <img src={s.student_image_url} alt={s.student_name} className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                          {s.student_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-foreground">{s.student_name}</p>
+                          {s.payment_status && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold ${s.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {s.payment_status === 'paid' ? 'Lunas' : 'Belum Lunas'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">{s.student_email}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+type UserSortKey = 'email' | 'full_name' | 'role';
+
+function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleChange: (id: string, role: UserRole) => void }) {
+  const [sortKey, setSortKey] = useState<UserSortKey>('email');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const sortedProfiles = useMemo(() => {
+    const compare = (left: Profile, right: Profile) => {
+      let result = 0;
+      switch (sortKey) {
+        case 'email':
+          result = (left.email ?? '').localeCompare(right.email ?? '');
+          break;
+        case 'full_name':
+          result = (left.full_name ?? '').localeCompare(right.full_name ?? '');
+          break;
+        case 'role':
+          result = left.role.localeCompare(right.role);
+          break;
+      }
+      return sortDirection === 'asc' ? result : -result;
+    };
+    return [...profiles].sort(compare);
+  }, [profiles, sortDirection, sortKey]);
+
+  const toggleSort = (nextSortKey: UserSortKey) => {
+    if (nextSortKey === sortKey) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(nextSortKey);
+    setSortDirection('asc');
+  };
+
+  const sortIndicator = (nextSortKey: UserSortKey) => {
+    if (nextSortKey !== sortKey) return <ChevronDown className="h-3 w-3 opacity-30" />;
+    return <ChevronDown className={`h-3 w-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} />;
+  };
+
+  return (
+    <section className="mt-6">
+      <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-muted text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('email')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Email {sortIndicator('email')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('full_name')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Nama {sortIndicator('full_name')}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-semibold">
+                  <button type="button" onClick={() => toggleSort('role')} className="flex items-center gap-1 font-semibold hover:text-primary">
+                    Role {sortIndicator('role')}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {sortedProfiles.map((profile) => (
+                <tr key={profile.id}>
+                  <Cell strong>{profile.email}</Cell>
+                  <Cell>{profile.full_name}</Cell>
+                  <td className="px-4 py-4">
+                    <select
+                      value={profile.role}
+                      onChange={(event) => onRoleChange(profile.id, event.target.value as UserRole)}
+                      className="h-9 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary"
+                    >
+                      <option value="student">Student</option>
+                      <option value="tutor">Tutor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -791,84 +1379,253 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
   );
 }
 
-function LobbyBookingsPanel({ lobbies }: { lobbies: MatchmakingLobby[] }) {
-  const lobbyStatusLabels: Record<string, string> = {
-    open: 'Mencari Anggota',
-    pending_payment: 'Menunggu Pembayaran',
-    paid: 'Kelas Aktif',
-    expired: 'Kadaluarsa',
-    cancelled: 'Dibatalkan',
-    completed: 'Selesai',
+type ReportPeriod = 'day' | 'week' | 'month';
+
+function getPeriodKey(date: Date, period: ReportPeriod) {
+  if (period === 'day') {
+    return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  }
+  if (period === 'week') {
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return `${new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short' }).format(weekStart)} – ${new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(weekEnd)}`;
+  }
+  return new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(date);
+}
+
+function getPeriodSortKey(date: Date, period: ReportPeriod) {
+  if (period === 'day') {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+  if (period === 'week') {
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    return `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function ReportsPanel({ paidPayments, reports }: { paidPayments: PaidPayment[]; reports: Report[] }) {
+  const [period, setPeriod] = useState<ReportPeriod>('month');
+
+  const aggregated = useMemo(() => {
+    const groups = new Map<string, { label: string; sortKey: string; count: number; revenue: number }>();
+    for (const payment of paidPayments) {
+      const dateStr = payment.paid_at ?? payment.created_at;
+      if (!dateStr) continue;
+      const date = new Date(dateStr);
+      const label = getPeriodKey(date, period);
+      const sortKey = getPeriodSortKey(date, period);
+      const existing = groups.get(sortKey);
+      if (existing) {
+        existing.count += 1;
+        existing.revenue += payment.amount;
+      } else {
+        groups.set(sortKey, { label, sortKey, count: 1, revenue: payment.amount });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  }, [paidPayments, period]);
+
+  const subjectBreakdown = useMemo(() => {
+    const groups = new Map<string, number>();
+    for (const payment of paidPayments) {
+      const subject = payment.lobby?.subject_name ?? 'Lainnya';
+      groups.set(subject, (groups.get(subject) ?? 0) + payment.amount);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }));
+  }, [paidPayments]);
+
+  const totalClasses = paidPayments.length;
+  const totalRevenue = paidPayments.reduce((sum, p) => sum + p.amount, 0);
+  const avgRevenue = totalClasses > 0 ? Math.round(totalRevenue / totalClasses) : 0;
+
+  const barChartData = useMemo(() => ({
+    labels: aggregated.map((a) => a.label),
+    datasets: [
+      {
+        label: 'Jumlah Kelas',
+        data: aggregated.map((a) => a.count),
+        backgroundColor: 'rgba(34, 197, 94, 0.6)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1,
+        borderRadius: 6,
+      },
+    ],
+  }), [aggregated]);
+
+  const lineChartData = useMemo(() => ({
+    labels: aggregated.map((a) => a.label),
+    datasets: [
+      {
+        label: 'Pendapatan',
+        data: aggregated.map((a) => a.revenue),
+        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+    ],
+  }), [aggregated]);
+
+  const doughnutColors = [
+    'rgba(59, 130, 246, 0.8)',
+    'rgba(34, 197, 94, 0.8)',
+    'rgba(245, 158, 11, 0.8)',
+    'rgba(239, 68, 68, 0.8)',
+    'rgba(139, 92, 246, 0.8)',
+    'rgba(236, 72, 153, 0.8)',
+    'rgba(20, 184, 166, 0.8)',
+    'rgba(249, 115, 22, 0.8)',
+  ];
+
+  const doughnutChartData = useMemo(() => ({
+    labels: subjectBreakdown.map((s) => s.name),
+    datasets: [
+      {
+        label: 'Pendapatan per Mata Kuliah',
+        data: subjectBreakdown.map((s) => s.value),
+        backgroundColor: subjectBreakdown.map((_, i) => doughnutColors[i % doughnutColors.length]),
+        borderColor: subjectBreakdown.map((_, i) => doughnutColors[i % doughnutColors.length].replace('0.8', '1')),
+        borderWidth: 1,
+      },
+    ],
+  }), [subjectBreakdown]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: { parsed: { y: number }; dataset: { label: string } }) => {
+            if (ctx.dataset.label === 'Pendapatan' || ctx.dataset.label === 'Pendapatan per Mata Kuliah') {
+              return `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}`;
+            }
+            return `${ctx.dataset.label}: ${ctx.parsed.y}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: (value: string | number) => {
+            const num = typeof value === 'string' ? Number(value) : value;
+            if (num >= 1000000) return `${(num / 1000000).toFixed(1)}jt`;
+            if (num >= 1000) return `${(num / 1000).toFixed(0)}rb`;
+            return num;
+          },
+        },
+      },
+    },
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom' as const, labels: { padding: 16, usePointStyle: true } },
+      tooltip: {
+        callbacks: {
+          label: (ctx: { parsed: number; label: string }) => `${ctx.label}: ${formatCurrency(ctx.parsed)}`,
+        },
+      },
+    },
   };
 
   return (
-    <section className="mt-6">
-      <DataTable headers={['Lobby', 'Subject', 'Tutor', 'Members', 'Price/Person', 'Status']}>
-        {lobbies.map((lobby) => (
-          <tr key={lobby.id}>
-            <Cell strong>{lobby.title}</Cell>
-            <Cell>{lobby.subject_name}</Cell>
-            <Cell>{lobby.tutor_name}</Cell>
-            <Cell>{lobby.member_count ?? 0}/{lobby.max_participants}</Cell>
-            <Cell>{formatCurrency(lobby.price_per_member)}</Cell>
-            <td className="px-4 py-4">
-              <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-                lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
-                lobby.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
-                lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
-                lobby.status === 'open' ? 'bg-blue-100 text-blue-700' :
-                'bg-secondary text-primary'
-              }`}>
-                {lobbyStatusLabels[lobby.status] ?? lobby.status}
-              </span>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-    </section>
-  );
-}
+    <section className="mt-6 space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-medium text-muted-foreground">{totalClasses} kelas terbayar</p>
+        <div className="flex items-center gap-1 rounded-lg border border-primary/15 bg-white p-1">
+          {(['day', 'week', 'month'] as ReportPeriod[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${period === p ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {p === 'day' ? 'Harian' : p === 'week' ? 'Mingguan' : 'Bulanan'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleChange: (id: string, role: UserRole) => void }) {
-  return (
-    <section className="mt-6">
-      <DataTable headers={['Email', 'Name', 'Role']}>
-        {profiles.map((profile) => (
-          <tr key={profile.id}>
-            <Cell strong>{profile.email}</Cell>
-            <Cell>{profile.full_name}</Cell>
-            <td className="px-4 py-4">
-              <select
-                value={profile.role}
-                onChange={(event) => onRoleChange(profile.id, event.target.value as UserRole)}
-                className="h-9 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary"
-              >
-                <option value="student">Student</option>
-                <option value="tutor">Tutor</option>
-                <option value="admin">Admin</option>
-              </select>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-    </section>
-  );
-}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total Kelas</p>
+          <p className="mt-2 text-3xl font-extrabold text-foreground">{totalClasses}</p>
+        </div>
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total Pendapatan</p>
+          <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(totalRevenue)}</p>
+        </div>
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Rata-rata per Kelas</p>
+          <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(avgRevenue)}</p>
+        </div>
+      </div>
 
-function ReportsPanel({ reports }: { reports: Report[] }) {
-  return (
-    <section className="mt-6">
-      <DataTable headers={['Type', 'Period Start', 'Period End', 'Created', 'Data Preview']}>
-        {reports.map((report) => (
-          <tr key={report.id}>
-            <Cell strong>{report.report_type}</Cell>
-            <Cell>{report.period_start}</Cell>
-            <Cell>{report.period_end}</Cell>
-            <Cell>{formatDate(report.created_at)}</Cell>
-            <Cell>{formatReportData(report.data)}</Cell>
-          </tr>
-        ))}
-      </DataTable>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-bold text-foreground">Jumlah Kelas per Periode</h3>
+          {aggregated.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">Belum ada data pembayaran.</p>
+          ) : (
+            <div className="h-64">
+              <Bar data={barChartData} options={chartOptions} />
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-bold text-foreground">Tren Pendapatan</h3>
+          {aggregated.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">Belum ada data pembayaran.</p>
+          ) : (
+            <div className="h-64">
+              <Line data={lineChartData} options={chartOptions} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+        <h3 className="mb-4 text-sm font-bold text-foreground">Pendapatan per Mata Kuliah</h3>
+        {subjectBreakdown.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Belum ada data pembayaran.</p>
+        ) : (
+          <div className="mx-auto h-72 max-w-md">
+            <Doughnut data={doughnutChartData} options={doughnutOptions} />
+          </div>
+        )}
+      </div>
+
+      {reports.length > 0 && (
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-bold text-foreground">Laporan Tersimpan</h3>
+          <DataTable headers={['Tipe', 'Periode Mulai', 'Periode Selesai', 'Dibuat', 'Data']}>
+            {reports.map((report) => (
+              <tr key={report.id}>
+                <Cell strong>{report.report_type}</Cell>
+                <Cell>{report.period_start}</Cell>
+                <Cell>{report.period_end}</Cell>
+                <Cell>{formatDate(report.created_at)}</Cell>
+                <Cell>{formatReportData(report.data)}</Cell>
+              </tr>
+            ))}
+          </DataTable>
+        </div>
+      )}
     </section>
   );
 }
@@ -898,13 +1655,15 @@ function DataTable({ children, headers }: { children: React.ReactNode; headers: 
     <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="bg-muted text-muted-foreground">
-            <tr>
-              {headers.map((header) => (
-                <th key={header} className="px-4 py-3 font-semibold">{header}</th>
-              ))}
-            </tr>
-          </thead>
+          {headers.length > 0 && (
+            <thead className="bg-muted text-muted-foreground">
+              <tr>
+                {headers.map((header) => (
+                  <th key={header} className="px-4 py-3 font-semibold">{header}</th>
+                ))}
+              </tr>
+            </thead>
+          )}
           <tbody className="divide-y divide-border">{children}</tbody>
         </table>
       </div>

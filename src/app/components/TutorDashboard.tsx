@@ -1011,6 +1011,7 @@ function SlotManagementView({
 }) {
   const [confirmCancelSlot, setConfirmCancelSlot] = useState<TutorAvailabilitySlot | null>(null);
   const [studentModalSlot, setStudentModalSlot] = useState<TutorAvailabilitySlot | null>(null);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   const visibleSlots = useMemo(
     () => slots.filter((s) => s.status !== 'cancelled'),
@@ -1027,6 +1028,15 @@ function SlotManagementView({
     setConfirmCancelSlot(null);
     await onCancelSlot(slotId);
   }, [confirmCancelSlot, onCancelSlot]);
+
+  const handleOpenForm = () => {
+    setIsFormModalOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    setIsFormModalOpen(false);
+  };
+
   return (
     <section>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1036,116 +1046,135 @@ function SlotManagementView({
             Buat slot sekali atau mingguan, lalu pantau daftar slot aktif pada bulan yang dipilih.
           </p>
         </div>
-        <div className="rounded-lg border border-primary/10 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">
-          {isLoading ? 'Memuat data...' : `${visibleSlots.length} slot pada bulan ini`}
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg border border-primary/10 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">
+            {isLoading ? 'Memuat data...' : `${visibleSlots.length} slot pada bulan ini`}
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenForm}
+            className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 transition"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Tambah Slot
+          </button>
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-        <div className="space-y-6">
-          <form onSubmit={onSubmit} className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
-                <BookOpen className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-extrabold tracking-normal text-foreground">Tambah Slot</h2>
-                <p className="text-xs font-medium text-muted-foreground">Bisa dibuat sekali atau diulang mingguan</p>
-              </div>
-            </div>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-extrabold tracking-normal text-foreground">Jadwal Bulanan</h2>
+          <p className="text-sm font-medium text-muted-foreground">{visibleSlots.length} slot pada bulan ini</p>
+        </div>
+        <label className="block">
+          <span className="sr-only">Bulan jadwal</span>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(event) => setSelectedMonth(event.target.value)}
+            className="h-10 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          />
+        </label>
+      </div>
 
-            <TutorSelect label="Mata kuliah" value={slotForm.subjectId} onChange={(value) => setSlotForm({ ...slotForm, subjectId: value })} required>
-              <option value="">Pilih mata kuliah</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </TutorSelect>
-            <TutorTextInput label="Tanggal mulai" type="date" value={slotForm.date} onChange={(value) => setSlotForm({ ...slotForm, date: value })} required />
-            <div className="grid grid-cols-2 gap-3">
-              <TutorTextInput label="Mulai" type="time" value={slotForm.startTime} onChange={(value) => setSlotForm({ ...slotForm, startTime: value })} required />
-              <TutorTextInput label="Selesai" type="time" value={slotForm.endTime} onChange={(value) => setSlotForm({ ...slotForm, endTime: value })} required />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {!isLoading && visibleSlots.length === 0 && (
+          <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground shadow-md md:col-span-2 xl:col-span-3">
+            Belum ada slot pada bulan ini.
+          </div>
+        )}
+        {visibleSlots.map((slot) => (
+          <SlotCard
+            key={slot.id}
+            slot={slot}
+            onViewStudents={setStudentModalSlot}
+            onCancel={handleOpenCancel}
+            showCancel={slot.status === 'available'}
+          />
+        ))}
+      </div>
+
+      {isFormModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-primary/10 bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-foreground">Tambah Slot</h2>
+                  <p className="text-xs font-medium text-muted-foreground">Bisa dibuat sekali atau diulang mingguan</p>
+                </div>
+              </div>
+              <button type="button" onClick={handleCloseForm} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Tutup">
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <TutorTextInput label="Harga total" type="number" value={String(slotForm.priceTotal)} onChange={(value) => setSlotForm({ ...slotForm, priceTotal: Number(value) })} />
-              <TutorTextInput label="Maks siswa" type="number" value={String(slotForm.maxParticipants)} onChange={(value) => setSlotForm({ ...slotForm, maxParticipants: Number(value) })} />
-            </div>
-            <TutorTextInput label="Lokasi" value={slotForm.location} onChange={(value) => setSlotForm({ ...slotForm, location: value })} />
-            <TutorTextInput label="Link meeting" value={slotForm.meetingUrl} onChange={(value) => setSlotForm({ ...slotForm, meetingUrl: value })} />
-            <label className="mb-4 block">
-              <span className="mb-1 block text-sm font-semibold text-foreground">Catatan</span>
-              <textarea
-                value={slotForm.notes}
-                onChange={(event) => setSlotForm({ ...slotForm, notes: event.target.value })}
-                rows={3}
-                className="w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <TutorSelect
-                label="Pola jadwal"
-                value={slotRepeatMode}
-                onChange={(value) => setSlotForm({ ...slotForm, repeatMode: value === 'weekly' ? 'weekly' : 'once' })}
-              >
-                <option value="once">Sekali saja</option>
-                <option value="weekly">Ulang mingguan</option>
+            <form onSubmit={(e) => { onSubmit(e); handleCloseForm(); }}>
+              <TutorSelect label="Mata kuliah" value={slotForm.subjectId} onChange={(value) => setSlotForm({ ...slotForm, subjectId: value })} required>
+                <option value="">Pilih mata kuliah</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
               </TutorSelect>
-              {slotRepeatMode === 'weekly' && (
-                <TutorTextInput
-                  label="Jumlah minggu"
-                  type="number"
-                  value={String(slotForm.repeatWeeks ?? 4)}
-                  onChange={(value) => setSlotForm({ ...slotForm, repeatWeeks: Number(value) })}
-                />
-              )}
-            </div>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
-            >
-              <CalendarDays className="h-4 w-4" />
-              Tambah Slot
-            </button>
-          </form>
-        </div>
-
-        <section>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-extrabold tracking-normal text-foreground">Jadwal Bulanan</h2>
-              <p className="text-sm font-medium text-muted-foreground">{visibleSlots.length} slot pada bulan ini</p>
-            </div>
-            <label className="block">
-              <span className="sr-only">Bulan jadwal</span>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-                className="h-10 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            {!isLoading && visibleSlots.length === 0 && (
-              <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground shadow-md lg:col-span-2">
-                Belum ada slot pada bulan ini.
+              <TutorTextInput label="Tanggal mulai" type="date" value={slotForm.date} onChange={(value) => setSlotForm({ ...slotForm, date: value })} required />
+              <div className="grid grid-cols-2 gap-3">
+                <TutorTextInput label="Mulai" type="time" value={slotForm.startTime} onChange={(value) => setSlotForm({ ...slotForm, startTime: value })} required />
+                <TutorTextInput label="Selesai" type="time" value={slotForm.endTime} onChange={(value) => setSlotForm({ ...slotForm, endTime: value })} required />
               </div>
-            )}
-            {visibleSlots.map((slot) => (
-              <SlotCard
-                key={slot.id}
-                slot={slot}
-                onViewStudents={setStudentModalSlot}
-                onCancel={handleOpenCancel}
-                showCancel={slot.status === 'available'}
-              />
-            ))}
+              <div className="grid grid-cols-2 gap-3">
+                <TutorTextInput label="Harga total" type="number" value={String(slotForm.priceTotal)} onChange={(value) => setSlotForm({ ...slotForm, priceTotal: Number(value) })} />
+                <TutorTextInput label="Maks siswa" type="number" value={String(slotForm.maxParticipants)} onChange={(value) => setSlotForm({ ...slotForm, maxParticipants: Number(value) })} />
+              </div>
+              <TutorTextInput label="Lokasi" value={slotForm.location} onChange={(value) => setSlotForm({ ...slotForm, location: value })} />
+              <TutorTextInput label="Link meeting" value={slotForm.meetingUrl} onChange={(value) => setSlotForm({ ...slotForm, meetingUrl: value })} />
+              <label className="mb-4 block">
+                <span className="mb-1 block text-sm font-semibold text-foreground">Catatan</span>
+                <textarea
+                  value={slotForm.notes}
+                  onChange={(event) => setSlotForm({ ...slotForm, notes: event.target.value })}
+                  rows={3}
+                  className="w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <TutorSelect
+                  label="Pola jadwal"
+                  value={slotRepeatMode}
+                  onChange={(value) => setSlotForm({ ...slotForm, repeatMode: value === 'weekly' ? 'weekly' : 'once' })}
+                >
+                  <option value="once">Sekali saja</option>
+                  <option value="weekly">Ulang mingguan</option>
+                </TutorSelect>
+                {slotRepeatMode === 'weekly' && (
+                  <TutorTextInput
+                    label="Jumlah minggu"
+                    type="number"
+                    value={String(slotForm.repeatWeeks ?? 4)}
+                    onChange={(value) => setSlotForm({ ...slotForm, repeatWeeks: Number(value) })}
+                  />
+                )}
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={handleCloseForm} className="h-10 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary hover:bg-secondary transition">
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Tambah Slot
+                </button>
+              </div>
+            </form>
           </div>
-        </section>
-      </div>
+        </div>
+      )}
 
       {confirmCancelSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">

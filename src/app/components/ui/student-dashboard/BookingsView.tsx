@@ -320,6 +320,9 @@ export function JoinedLobbyRow({
         <p className="mb-2 text-sm font-medium text-muted-foreground">
           {lobby.subject_name} bersama {lobby.tutor_name}
         </p>
+        {lobby.description && (
+          <p className="mb-2 rounded-md bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground italic">{lobby.description}</p>
+        )}
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
           <span className={`rounded-full px-3 py-1 ${
             lobby.status === 'paid' ? 'bg-green-100 text-green-700' :

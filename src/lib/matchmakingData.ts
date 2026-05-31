@@ -346,6 +346,10 @@ export async function fetchMyTutorAvailability(tutorUserId: string, startIso: st
   return mapTutorAvailabilityRows(data ?? []);
 }
 
+export function isSlotExpired(slot: TutorAvailabilitySlot): boolean {
+  return new Date(slot.ends_at).getTime() < Date.now();
+}
+
 export async function fetchAdminTutorAvailability() {
   const { data, error } = await supabase
     .from('tutor_availability_slots')
@@ -422,7 +426,6 @@ export async function fetchStudentTutorScheduleSlots() {
     `)
     .in('status', ['available', 'held', 'booked'])
     .eq('tutor.status', 'approved')
-    .gte('starts_at', new Date().toISOString())
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
