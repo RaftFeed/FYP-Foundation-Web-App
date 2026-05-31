@@ -24,7 +24,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-primary shrink-0" />
-                <span>++62 858 8823 8018</span>
+                <span>+62 858 8823 8018</span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-primary shrink-0" />
@@ -81,15 +81,9 @@ export function Footer() {
             <p>&copy; 2026 FYP Foundation. Hak cipta dilindungi undang-undang.</p>
           </div>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-gray-300 transition-colors">
-              Privasi
-            </a>
-            <a href="#" className="hover:text-gray-300 transition-colors">
-              Ketentuan
-            </a>
-            <a href="#" className="hover:text-gray-300 transition-colors">
-              Cookie
-            </a>
+            <p>
+              Aksi nyata alumni IPB untuk Tri Dharma Perguruan Tinggi melalui Bimbingan belajar
+            </p>
           </div>
         </div>
       </div>

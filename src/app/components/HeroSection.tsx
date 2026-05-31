@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { Search, ArrowRight, Star, Users, BookOpen, Award, Check } from 'lucide-react';
+import heroImage from '../../img/Foto_Kelas.jpg';
 
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1711763560427-3cbd84a54409?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdHVkZW50JTIwc3R1ZHlpbmclMjBib29rcyUyMHVuaXZlcnNpdHklMjBzbWlsaW5nfGVufDF8fHx8MTc3NjY4NzAxMHww&ixlib=rb-4.1.0&q=80&w=1080';
+const HERO_IMAGE = heroImage;
 
 const stats = [
   { icon: BookOpen, value: '12+', label: 'Mata Kuliah' },
   { icon: Users, value: '500+', label: 'Mahasiswa' },
-  { icon: Award, value: '80+', label: 'Tutor Terverifikasi' },
+  { icon: Award, value: '20+', label: 'Tutor Terverifikasi' },
   { icon: Star, value: '4.9', label: 'Rating Rata-rata' },
 ];
 
 const allCourses = ['Fisika Dasar', 'Kalkulus', 'Kimia Dasar', 'Pemrograman', 'Matematika Diskrit', 'Biologi Umum'];
+
+function openAuthPage(mode: 'login' | 'signup') {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  window.history.pushState({}, '', `${base}/login${mode === 'signup' ? '?mode=signup' : ''}`);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 
 export function HeroSection() {
   const [searchInput, setSearchInput] = useState('');
@@ -31,9 +37,10 @@ export function HeroSection() {
 
   return (
     <section id="beranda" className="bg-white overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 py-16 lg:py-30">
+      <div className="max-w-7xl mx-auto px-4 md:px-5 py-16 lg:py-30">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="order-2 lg:order-1 text-left">
+
             <h1 className="text-foreground mb-5">
               Pilih Mata Kuliah &{' '}
               <span className="relative inline-block text-primary pb-2">
@@ -54,13 +61,31 @@ export function HeroSection() {
                   />
                 </svg>
               </span>{' '}
-              Belajar!
+              Belajar
             </h1>
 
-            <p className="text-muted-foreground mb-8 max-w-md" style={{ fontSize: '1.05rem', lineHeight: '1.7' }}>
-              Belajar lebih efektif bersama teman sekelas - pilih mata kuliah PPKU-mu, bergabung ke kelas grup, atau
-              buat sesi privat bersama tutor terbaik.
+            <p className="text-muted-foreground mb-8 max-w-lg" style={{ fontSize: '1.05rem', lineHeight: '1.7' }}>
+              Temukan kelas yang pas, pilih tutor yang tepat, dan mulai belajar dengan alur yang jelas. Satu keputusan
+              kecil hari ini bisa bikin semester kamu jauh lebih ringan.
             </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 mb-8">
+              <button
+                type="button"
+                onClick={() => openAuthPage('login')}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-primary px-7 py-4 text-base font-semibold text-primary transition-all hover:bg-secondary active:scale-95"
+                aria-label="Masuk ke akun"
+              >
+                Masuk
+              </button>
+              <a
+                href="#matkul"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-7 py-4 text-base font-semibold text-white shadow-lg transition-all hover:bg-primary/90 active:scale-95"
+              >
+                Lihat Matkul
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </div>
 
 
             {/* Search Suggestions */}
@@ -107,7 +132,6 @@ export function HeroSection() {
             <div
               className="absolute inset-0 rounded-3xl"
               style={{
-                background: 'radial-gradient(ellipse at 60% 40%, #0D6B5E18 0%, #F0FDF8 60%, transparent 100%)',
                 transform: 'scale(1.1)',
               }}
             />

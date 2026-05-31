@@ -19,7 +19,7 @@ const themeTokens: Record<string, Record<string, string>> = {
   default: {
     '--primary': '#27269d',
     '--accent': '#e4bf46',
-    '--secondary': '#F0FDF8',
+    '--secondary': '#FAF8F2',
     '--foreground': '#111827',
     '--radius': '0.75rem',
     '--background': '#ffffff',
@@ -130,7 +130,7 @@ function AppContent() {
 
       {/* Katalog Tutor */}
       <section id="katalog" className="py-20 bg-secondary">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 md:px-5">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-10 gap-4">
             <div>
               {/* <p className="text-primary text-sm mb-2" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -146,26 +146,26 @@ function AppContent() {
 
           <div className="flex gap-8 items-start">
             <div className="flex-1">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-5">
+              <div className="overflow-x-auto pb-5 [scrollbar-color:rgba(39,38,157,0.35)_transparent] [scrollbar-width:thin]">
                 {isLoadingTutors && (
-                  <div className="col-span-full rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
+                  <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
                     Memuat tutor dari database...
                   </div>
                 )}
                 {!isLoadingTutors && tutors.length === 0 && (
-                  <div className="col-span-full rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
+                  <div className="rounded-xl border border-primary/10 bg-white p-6 text-sm font-medium text-muted-foreground">
                     Belum ada tutor approved di database.
                   </div>
                 )}
-                {tutors.map((tutor) => (
-                  <TutorCard key={tutor.id} {...tutor} />
-                ))}
-              </div>
-
-              <div className="text-center mt-10">
-                <button className="px-8 py-3 border-2 border-primary text-primary rounded-xl hover:bg-primary hover:text-white transition-all text-sm">
-                  Muat Lebih Banyak Tutor
-                </button>
+                {tutors.length > 0 && (
+                  <div className="flex min-w-max gap-6">
+                    {tutors.map((tutor) => (
+                      <div key={tutor.id} className="w-[220px] shrink-0">
+                        <TutorCard {...tutor} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

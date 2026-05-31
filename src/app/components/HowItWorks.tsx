@@ -1,7 +1,19 @@
+import { useEffect, useState } from 'react';
 import { Search, Users, Video, ArrowRight } from 'lucide-react';
+import papanImage from '../../img/Foto_Papan.png';
+import { fetchApprovedTutorCards, type PublicTutorCard } from '../../lib/dashboardData';
 
-const TUTOR_IMG =
-  'https://images.unsplash.com/photo-1758685848612-dc8d3c0e9646?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0dXRvciUyMHRlYWNoaW5nJTIwc3R1ZGVudCUyMHdoaXRlYm9hcmQlMjBjbGFzc3Jvb218ZW58MXx8fHwxNzc2Njg3MDEzfDA&ixlib=rb-4.1.0&q=80&w=800';
+const fallbackTutorAvatars = [
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop&crop=face',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face',
+];
+
+function openAuthPage(mode: 'login' | 'signup') {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  window.history.pushState({}, '', `${base}/login${mode === 'signup' ? '?mode=signup' : ''}`);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 
 const steps = [
   {
@@ -20,19 +32,38 @@ const steps = [
     step: '03',
     icon: Video,
     title: 'Belajar Bersama Tutor',
-    description: 'Sesi dipandu tutor terverifikasi - online atau tatap muka. Materi jelas, nilai meningkat!',
+    description: 'Sesi dipandu tutor berprestasi - online atau tatap muka. Materi jelas, nilai meningkat!',
   },
 ];
 
 export function HowItWorks() {
+  const [tutorAvatars, setTutorAvatars] = useState<PublicTutorCard[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    fetchApprovedTutorCards(3)
+      .then((tutors) => {
+        if (active) {
+          setTutorAvatars(tutors);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setTutorAvatars([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <section id="panduan" className="py-20 bg-white">
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-5">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           <div>
-            <p className="text-primary text-sm mb-3" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Cara Kerja
-            </p>
             <h2 className="text-foreground mb-4">
               Mulai Belajar dalam
               <br />
@@ -49,7 +80,7 @@ export function HowItWorks() {
                 return (
                   <div key={step.step} className="flex gap-4 group">
                     <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:bg-accent focus:outline-none focus:ring-2 focus:ring-primary transition-colors shrink-0" role="img" aria-label={`Step ${step.step}: ${step.title}`}>
+                      <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-md focus:outline-none focus:ring-2 focus:ring-primary transition-colors shrink-0" role="img" aria-label={`Step ${step.step}: ${step.title}`}>
                         <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                       </div>
                       {i < steps.length - 1 && <div className="w-0.5 h-8 bg-border mt-2" aria-hidden="true" />}
@@ -69,7 +100,12 @@ export function HowItWorks() {
               })}
             </div>
 
-            <button className="mt-10 inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-95 transition-all shadow-md text-sm font-medium" aria-label="Start learning now">
+            <button
+              type="button"
+              onClick={() => openAuthPage('signup')}
+              className="mt-10 inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-95 transition-all shadow-md text-sm font-medium"
+              aria-label="Mulai daftar sekarang"
+            >
               Mulai Sekarang
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -78,7 +114,7 @@ export function HowItWorks() {
           <div className="relative hidden lg:flex justify-center items-center">
             <div className="relative">
               <div className="w-[420px] h-[460px] rounded-3xl overflow-hidden shadow-2xl">
-                <img src={TUTOR_IMG} alt="Tutor mengajar" className="w-full h-full object-cover" />
+                <img src={papanImage} alt="Tutor mengajar" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent" />
               </div>
 
@@ -86,24 +122,25 @@ export function HowItWorks() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-foreground" style={{ fontWeight: 800, fontSize: '1.2rem' }}>
-                      80+ Tutor
+                      20+ Tutor
                     </p>
-                    <p className="text-muted-foreground text-xs">Terverifikasi & Aktif</p>
+                    <p className="text-muted-foreground text-xs">Aktif dan Berprestasi</p>
                   </div>
 
                   <div className="flex -space-x-2">
-                    {[
-                      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-                      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop&crop=face',
-                      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face',
-                    ].map((src, i) => (
-                      <img key={i} src={src} alt="" className="w-9 h-9 rounded-full border-2 border-white object-cover" />
+                    {(tutorAvatars.length > 0 ? tutorAvatars : fallbackTutorAvatars).map((tutor, i) => (
+                      <img
+                        key={typeof tutor === 'string' ? tutor : tutor.id}
+                        src={typeof tutor === 'string' ? tutor : (tutor.imageUrl || fallbackTutorAvatars[i % fallbackTutorAvatars.length])}
+                        alt=""
+                        className="w-9 h-9 rounded-full border-2 border-white object-cover"
+                      />
                     ))}
                     <div
                       className="w-9 h-9 rounded-full border-2 border-white bg-primary flex items-center justify-center text-white text-xs"
                       style={{ fontWeight: 700 }}
                     >
-                      +77
+                      +17
                     </div>
                   </div>
                 </div>
