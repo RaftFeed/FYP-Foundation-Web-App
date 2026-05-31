@@ -1,6 +1,6 @@
 import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, CircleCheck, Clock3, Home, LogOut, MapPin, NotebookTabs, RefreshCcw, Search, Settings, SquarePen, UserRound, Users } from 'lucide-react';
 import logoUrl from '../../img/FYP_no_bg.png';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { MatchmakingLobbyView } from './MatchmakingLobbyView';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
@@ -83,6 +83,7 @@ export function StudentDashboard() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const previousActiveView = useRef<StudentView>(activeView);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -157,6 +158,14 @@ export function StudentDashboard() {
   useEffect(() => {
     void loadDashboard();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (activeView === 'profile' && previousActiveView.current !== 'profile') {
+      setProfileForm({ fullName: '' });
+    }
+
+    previousActiveView.current = activeView;
+  }, [activeView]);
 
 
 

@@ -53,10 +53,12 @@ CREATE TABLE public.matchmaking_lobby_payments (
   lobby_id uuid NOT NULL,
   student_id uuid NOT NULL,
   amount integer NOT NULL CHECK (amount >= 0),
-  status text NOT NULL DEFAULT 'paid'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text])),
+  status text NOT NULL DEFAULT 'paid'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text, 'refund_pending'::text, 'refunded'::text])),
   payment_method text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  invoice_code text,
+  paid_at timestamp with time zone,
   CONSTRAINT matchmaking_lobby_payments_pkey PRIMARY KEY (id),
   CONSTRAINT matchmaking_lobby_payments_lobby_id_fkey FOREIGN KEY (lobby_id) REFERENCES public.matchmaking_lobbies(id),
   CONSTRAINT matchmaking_lobby_payments_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.profiles(id)
@@ -91,6 +93,19 @@ CREATE TABLE public.student_profiles (
   CONSTRAINT student_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT student_profiles_id_fkey FOREIGN KEY (id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.study_materials (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  file_url text NOT NULL,
+  uploaded_by uuid NOT NULL,
+  subject_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT study_materials_pkey PRIMARY KEY (id),
+  CONSTRAINT study_materials_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.profiles(id),
+  CONSTRAINT study_materials_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id)
+);
 CREATE TABLE public.subjects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL UNIQUE,
@@ -124,7 +139,7 @@ CREATE TABLE public.tutor_profiles (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid UNIQUE,
   subject_id uuid,
-  full_name text NOT NULL,
+  full_name text,
   bio text,
   hourly_rate integer NOT NULL CHECK (hourly_rate >= 0),
   rating numeric NOT NULL DEFAULT 0 CHECK (rating >= 0::numeric AND rating <= 5::numeric),

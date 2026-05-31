@@ -250,12 +250,12 @@ function isMissingMatchmakingPaymentDependency(error: { code?: string; message?:
 }
 
 export async function refreshExpiredLobbies() {
-  const { error } = await supabase.rpc('refresh_expired_matchmaking_lobbies');
-  if (isMissingMatchmakingPaymentDependency(error)) {
-    return;
-  }
+  const [expireRes, lockRes] = await Promise.all([
+    supabase.rpc('refresh_expired_matchmaking_lobbies'),
+    supabase.rpc('lock_lobbies_before_class'),
+  ]);
 
-  if (error) {
+  if (isMissingMatchmakingPaymentDependency(expireRes.error)) {
     return;
   }
 }

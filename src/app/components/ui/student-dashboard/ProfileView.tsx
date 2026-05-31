@@ -108,10 +108,6 @@ export function ProfileView({
             >
               {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
-
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
-              Dengan menggunakan layanan ini, Anda setuju dengan syarat dan ketentuan serta kebijakan privasi kami. Pastikan informasi yang Anda berikan akurat dan terkini.
-            </p>
           </form>
         </div>
 

@@ -20,6 +20,7 @@ import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/b
 import { Subject, fetchSubjects, formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
 import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
 import { SlotCard, StudentListModal } from './ui/tutor-dashboard/SlotCard';
+import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
 import {
   TutorAvailabilitySlot,
   TutorSelfProfile,
@@ -27,8 +28,9 @@ import {
   createTutorAvailability,
   fetchMyTutorAvailability,
   fetchMyTutorProfile,
-  upsertMyTutorProfile,
 } from '../../lib/matchmakingData';
+import { updateProfileDetails } from '../../lib/dashboardData';
+import { supabase } from '../../lib/supabase';
 
 const emptyProfileForm = {
   fullName: '',
@@ -67,6 +69,18 @@ function getDisplayName(email?: string) {
   return email?.split('@')[0].replace(/[._-]+/g, ' ') || 'Tutor';
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+
+  return fallback;
+}
+
 type TutorView = 'dashboard' | 'profile' | 'slots' | 'schedule' | 'settings';
 
 const navigation = [
@@ -91,9 +105,15 @@ export function TutorDashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [isNoticeVisible, setIsNoticeVisible] = useState(false);
+  const [notice, setNotice] = useState<NoticeModalState | null>(null);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const showNotice = (tone: NoticeModalState['tone'], message: string) => {
+    setNotice({ tone, message });
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -106,6 +126,7 @@ export function TutorDashboard() {
 
   const monthRange = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
   const slotRepeatMode = slotForm.repeatMode === 'weekly' || Boolean((slotForm as typeof emptySlotForm & { repeatWeekly?: boolean }).repeatWeekly) ? 'weekly' : 'once';
+  const effectiveProfileSubjectId = profileForm.subjectId || profile?.subject_id || subjects[0]?.id || '';
   const displayName = profile?.full_name?.trim() ? profile.full_name : getDisplayName(user?.email);
   const avatarUrl = user?.user_metadata?.custom_avatar_url || profile?.image_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
   const approved = profile?.status === 'approved';
@@ -160,7 +181,7 @@ export function TutorDashboard() {
         priceTotal: current.priceTotal || nextProfile?.hourly_rate || 120000,
       }));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal memuat dashboard tutor.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memuat dashboard tutor.');
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +203,7 @@ export function TutorDashboard() {
       setSlots(nextSlots);
       writeLocalCache(cacheKey, nextSlots);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal memuat jadwal tutor.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memuat jadwal tutor.');
     }
   };
 
@@ -194,48 +215,63 @@ export function TutorDashboard() {
     void loadSlots();
   }, [user?.id, selectedMonth]);
 
-  useEffect(() => {
-    if (notice) {
-      setIsNoticeVisible(true);
-      const timer = setTimeout(() => {
-        setIsNoticeVisible(false);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [notice]);
-
-  useEffect(() => {
-    if (!isNoticeVisible && notice) {
-      const timer = setTimeout(() => {
-        setNotice(null);
-      }, 500); // 500ms transition duration
-      return () => clearTimeout(timer);
-    }
-  }, [isNoticeVisible, notice]);
-
   const handleProfileSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!profileForm.subjectId) {
-      setNotice('Pilih mata kuliah utama tutor terlebih dahulu.');
+    const tutorUserId = user?.id;
+
+    if (!profileForm.fullName.trim()) {
+      showNotice('error', 'Nama lengkap tutor wajib diisi.');
+      return;
+    }
+
+    if (!tutorUserId) {
+      showNotice('error', 'Sesi login tutor tidak ditemukan.');
+      return;
+    }
+
+    if (!effectiveProfileSubjectId) {
+      showNotice('error', 'Pilih mata kuliah utama tutor terlebih dahulu.');
       return;
     }
 
     setIsSaving(true);
     setNotice(null);
     try {
-      const savedProfile = await upsertMyTutorProfile({
-        fullName: profileForm.fullName,
-        subjectId: profileForm.subjectId,
-        hourlyRate: Number(profileForm.hourlyRate),
-        bio: profileForm.bio,
-        imageUrl: profileForm.imageUrl,
+      const trimmedName = profileForm.fullName.trim();
+      await Promise.all([
+        updateProfileDetails(tutorUserId, {
+          full_name: trimmedName,
+        }),
+        supabase
+          .from('tutor_profiles')
+          .upsert({
+            user_id: tutorUserId,
+            full_name: trimmedName,
+            subject_id: effectiveProfileSubjectId,
+            hourly_rate: Number(profileForm.hourlyRate),
+            bio: profileForm.bio || null,
+            image_url: profileForm.imageUrl || null,
+          }, { onConflict: 'user_id' }),
+      ]);
+
+      const activeProfile = await fetchMyTutorProfile(tutorUserId);
+      if (!activeProfile) {
+        throw new Error('Profil tutor tidak ditemukan setelah disimpan.');
+      }
+
+      setProfile(activeProfile);
+      setProfileForm({
+        fullName: activeProfile.full_name ?? trimmedName,
+        subjectId: activeProfile.subject_id ?? effectiveProfileSubjectId,
+        hourlyRate: activeProfile.hourly_rate ?? profileForm.hourlyRate,
+        bio: activeProfile.bio ?? profileForm.bio,
+        imageUrl: activeProfile.image_url ?? profileForm.imageUrl,
       });
-      setProfile(savedProfile);
-      setNotice(savedProfile.status === 'approved' ? 'Profil tutor tersimpan.' : 'Profil tutor tersimpan dan menunggu approval admin.');
+      showNotice('success', activeProfile.status === 'approved' ? 'Profil tutor tersimpan.' : 'Profil tutor tersimpan dan menunggu approval admin.');
       await loadSlots();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal menyimpan profil tutor.');
+      showNotice('error', getErrorMessage(error, 'Gagal menyimpan profil tutor.'));
     } finally {
       setIsSaving(false);
     }
@@ -249,23 +285,22 @@ export function TutorDashboard() {
       const { uploadAvatar } = await import('../../lib/storage');
       const newAvatarUrl = await uploadAvatar(file, user.id);
 
-      const savedProfile = await upsertMyTutorProfile({
-        fullName: profileForm.fullName,
-        subjectId: profileForm.subjectId,
-        hourlyRate: Number(profileForm.hourlyRate),
-        bio: profileForm.bio,
-        imageUrl: newAvatarUrl,
-      });
-      setProfile(savedProfile);
       setProfileForm(prev => ({ ...prev, imageUrl: newAvatarUrl }));
-      setNotice('Foto profil tutor berhasil diperbarui.');
+      await supabase
+        .from('tutor_profiles')
+        .update({ image_url: newAvatarUrl })
+        .eq('user_id', user.id);
 
-      const { supabase } = await import('../../lib/supabase');
+      const refreshedProfile = await fetchMyTutorProfile(user.id);
+      if (refreshedProfile) {
+        setProfile(refreshedProfile);
+      }
+      showNotice('success', 'Foto profil tutor berhasil diperbarui.');
       await supabase.auth.updateUser({
         data: { custom_avatar_url: newAvatarUrl, avatar_url: newAvatarUrl },
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal mengupload foto profil.');
+      showNotice('error', getErrorMessage(error, 'Gagal mengupload foto profil.'));
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -275,7 +310,7 @@ export function TutorDashboard() {
     event.preventDefault();
 
     if (!slotForm.subjectId) {
-      setNotice('Pilih mata kuliah untuk slot jadwal.');
+      showNotice('error', 'Pilih mata kuliah untuk slot jadwal.');
       return;
     }
 
@@ -302,10 +337,10 @@ export function TutorDashboard() {
         });
       }
 
-      setNotice(recurrenceGroupId ? `${occurrences.length} slot mingguan berhasil dibuat.` : 'Slot jadwal berhasil dibuat.');
+      showNotice('success', recurrenceGroupId ? `${occurrences.length} slot mingguan berhasil dibuat.` : 'Slot jadwal berhasil dibuat.');
       await loadSlots();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal membuat slot jadwal.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal membuat slot jadwal.');
     } finally {
       setIsSaving(false);
     }
@@ -316,12 +351,56 @@ export function TutorDashboard() {
     setNotice(null);
     try {
       await cancelTutorAvailability(slotId);
-      setNotice('Slot jadwal dibatalkan.');
+      showNotice('success', 'Slot jadwal dibatalkan.');
       await loadSlots();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Gagal membatalkan slot jadwal.');
+      showNotice('error', error instanceof Error ? error.message : 'Gagal membatalkan slot jadwal.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const isEmailUser = user?.app_metadata?.providers?.includes('email') ?? false;
+
+  const handleUpdatePassword = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!user?.email) {
+      showNotice('error', 'Gagal memverifikasi akun Anda.');
+      return;
+    }
+
+    if (!currentPassword) {
+      showNotice('error', 'Silakan masukkan password saat ini.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showNotice('error', 'Password baru minimal 6 karakter.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (verifyError) {
+        throw new Error('Password saat ini salah.');
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      showNotice('success', 'Password berhasil diperbarui.');
+      setCurrentPassword('');
+      setNewPassword('');
+    } catch (error) {
+      showNotice('error', getErrorMessage(error, 'Gagal memperbarui password.'));
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -457,41 +536,7 @@ export function TutorDashboard() {
             </div>
           </header>
 
-          <div
-            className="fixed left-1/2 z-50 w-full max-w-md px-4 transition-all duration-500 ease-in-out"
-            style={{
-              transform: 'translateX(-50%)',
-              top: isNoticeVisible ? '24px' : '-120px',
-              opacity: isNoticeVisible ? 1 : 0,
-              pointerEvents: isNoticeVisible ? 'auto' : 'none',
-            }}
-          >
-            {notice && (
-              <div
-                className={`rounded-xl border bg-white px-5 py-4 text-sm font-semibold shadow-2xl flex items-center justify-between gap-3 border-l-4 ${notice.toLowerCase().includes('gagal') || notice.toLowerCase().includes('error')
-                  ? 'border-red-200 border-l-red-500 text-red-600'
-                  : 'border-primary/20 border-l-primary text-primary'
-                  }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full animate-pulse shrink-0 ${notice.toLowerCase().includes('gagal') || notice.toLowerCase().includes('error') ? 'bg-red-500' : 'bg-primary'
-                    }`} />
-                  <span>{notice}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsNoticeVisible(false)}
-                  className={`transition-colors focus:outline-none ${notice.toLowerCase().includes('gagal') || notice.toLowerCase().includes('error')
-                    ? 'text-red-500/60 hover:text-red-700'
-                    : 'text-primary/60 hover:text-primary'
-                    }`}
-                  aria-label="Tutup"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-          </div>
+          {notice && <NoticeModal notice={notice} onClose={() => setNotice(null)} />}
 
           <div className="space-y-6">
             {activeView === 'dashboard' && (
@@ -545,11 +590,68 @@ export function TutorDashboard() {
             {activeView === 'schedule' && <TutorScheduleView slots={slots} />}
 
             {activeView === 'settings' && (
-              <section className="rounded-2xl border border-primary/10 bg-white p-6 shadow-md">
-                <h1 className="text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Preferensi akun tutor</h1>
-                <p className="mt-2 max-w-3xl text-sm font-medium leading-relaxed text-muted-foreground">
-                  Area ini disiapkan untuk pengaturan tambahan. Saat ini fokus utama ada pada profil, slot jadwal, dan kalender bulanan.
-                </p>
+              <section className="space-y-6">
+                <div className="rounded-xl border border-primary/10 bg-white p-6 shadow-md">
+                  <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Ganti Password</h1>
+                  {!isEmailUser ? (
+                    <div className="rounded-lg border border-primary/10 bg-secondary/50 p-4 text-sm">
+                      <p className="mb-1 font-semibold text-primary">Akun Pihak Ketiga</p>
+                      <p className="text-muted-foreground">
+                        Akun kamu terhubung menggunakan penyedia layanan pihak ketiga (seperti Google). Kata sandi kamu diatur melalui layanan tersebut.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mb-5 text-sm font-medium text-muted-foreground">
+                        Perbarui kata sandi akun kamu di sini. Pastikan kata sandi aman.
+                      </p>
+                      <form onSubmit={handleUpdatePassword} className="max-w-md grid gap-4">
+                        <label className="block">
+                          <span className="text-sm font-semibold text-foreground">Password Saat Ini</span>
+                          <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                            placeholder="Masukkan password saat ini"
+                            className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-semibold text-foreground">Password Baru</span>
+                          <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(event) => setNewPassword(event.target.value)}
+                            placeholder="Masukkan password baru"
+                            className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={isUpdatingPassword || !newPassword || !currentPassword}
+                          className="h-11 rounded-lg bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                        >
+                          {isUpdatingPassword ? 'Menyimpan...' : 'Simpan Password'}
+                        </button>
+                      </form>
+                    </>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-md">
+                  <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-red-900 lg:text-3xl">Sesi Akun</h1>
+                  <p className="mb-5 text-sm font-medium text-red-700/80">
+                    Keluar dari akun kamu pada perangkat ini. Kamu harus login kembali untuk mengakses dashboard.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    className="flex h-11 w-fit items-center gap-2 rounded-lg bg-red-600 px-6 text-sm font-semibold text-white transition hover:bg-red-700"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </button>
+                </div>
               </section>
             )}
           </div>
@@ -612,7 +714,7 @@ function TutorTextInput({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm text-foreground outline-none transition placeholder:text-foreground/30 focus:border-primary focus:ring-2 focus:ring-primary/20"
       />
     </label>
   );
@@ -638,7 +740,7 @@ function TutorSelect({
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className={`h-10 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 ${value ? 'text-foreground' : 'text-foreground/30'}`}
       >
         {children}
       </select>
@@ -912,10 +1014,11 @@ function ProfileView({
               <select
                 value={profileForm.subjectId}
                 onChange={(e) => setProfileForm({ ...profileForm, subjectId: e.target.value })}
-                className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                required
+                className={`mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 ${profileForm.subjectId ? 'text-foreground' : 'text-foreground/30'}`}
               >
-                <option value="">Pilih mata kuliah</option>
+                <option value="" disabled>
+                  Pilih mata kuliah
+                </option>
                 {subjects.map((subject) => (
                   <option key={subject.id} value={subject.id}>
                     {subject.name}
@@ -924,17 +1027,6 @@ function ProfileView({
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-foreground">Harga total default (Rp)</label>
-              <input
-                type="number"
-                value={profileForm.hourlyRate}
-                onChange={(e) => setProfileForm({ ...profileForm, hourlyRate: Number(e.target.value) })}
-                placeholder="Masukkan harga default per slot"
-                className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
-                required
-              />
-            </div>
 
             <div>
               <label className="block text-sm font-semibold text-foreground">Bio singkat</label>
@@ -943,21 +1035,17 @@ function ProfileView({
                 onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
                 rows={4}
                 placeholder="Ceritakan singkat tentang dirimu..."
-                className="mt-2 w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
+                className="mt-2 w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm font-medium text-foreground outline-none transition placeholder:text-foreground/30 focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
 
             <button
               type="submit"
-              disabled={isSaving || !profileForm.fullName.trim() || !profileForm.subjectId}
+              disabled={isSaving || !profileForm.fullName.trim()}
               className="h-11 w-full rounded-lg bg-black text-sm font-semibold text-white transition hover:bg-black/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
             >
               {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
-
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
-              Dengan menggunakan layanan ini, Anda setuju dengan syarat dan ketentuan serta kebijakan privasi kami. Pastikan informasi yang Anda berikan akurat dan terkini.
-            </p>
           </form>
         </div>
 
@@ -1047,9 +1135,6 @@ function SlotManagementView({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="rounded-lg border border-primary/10 bg-white px-4 py-3 text-sm font-semibold text-primary shadow-sm">
-            {isLoading ? 'Memuat data...' : `${visibleSlots.length} slot pada bulan ini`}
-          </div>
           <button
             type="button"
             onClick={handleOpenForm}

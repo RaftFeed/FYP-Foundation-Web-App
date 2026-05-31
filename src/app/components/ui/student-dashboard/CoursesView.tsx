@@ -46,7 +46,7 @@ export function CoursesView({
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-extrabold tracking-normal text-foreground">Daftar Mata Kuliah</h2>
-        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} matkul aktif</p>
+        <p className="text-sm font-medium text-muted-foreground">Menampilkan {filteredSubjects.length} matkul</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
