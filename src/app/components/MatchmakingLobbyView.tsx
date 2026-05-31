@@ -1,4 +1,4 @@
-import { Banknote, CalendarDays, Clock3, Copy, Lock, Search, Timer, Users } from 'lucide-react';
+import { Banknote, CalendarDays, ChevronLeft, ChevronRight, Clock3, Copy, Lock, Search, Timer, Users } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
@@ -181,6 +181,20 @@ export function MatchmakingLobbyView({
       ].some((value) => value.toLowerCase().includes(normalizedQuery));
     });
   }, [availableLobbies, searchQuery, selectedDate, selectedSubject, selectedTutor]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedSubject, selectedDate, selectedTutor]);
+
+  const totalPages = Math.ceil(filteredLobbies.length / ITEMS_PER_PAGE);
+
+  const paginatedLobbies = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLobbies.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredLobbies, currentPage]);
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -440,7 +454,7 @@ export function MatchmakingLobbyView({
               <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada lobby public yang bisa kamu ikuti sekarang.</div>
             )}
             {!isLoading &&
-              filteredLobbies.map((lobby) => (
+              paginatedLobbies.map((lobby) => (
                 <LobbyCard
                   key={lobby.id}
                   lobby={lobby}
@@ -450,6 +464,13 @@ export function MatchmakingLobbyView({
                   onShowDetail={() => setActiveLobbyDetail(lobby)}
                 />
               ))}
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredLobbies.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+            />
           </div>
         </div>
       </div>
@@ -797,4 +818,92 @@ async function copyLobbyCode(code: string) {
   } catch {
     return false;
   }
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  const startRange = (currentPage - 1) * itemsPerPage + 1;
+  const endRange = Math.min(currentPage * itemsPerPage, totalItems);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      let start = Math.max(1, currentPage - 2);
+      let end = Math.min(totalPages, currentPage + 2);
+      
+      if (start === 1) {
+        end = 5;
+      } else if (end === totalPages) {
+        start = totalPages - 4;
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-between gap-4 border-t border-primary/10 bg-white px-6 py-4 sm:flex-row">
+      <p className="text-sm font-medium text-muted-foreground">
+        Menampilkan <span className="font-semibold text-foreground">{startRange}</span>-
+        <span className="font-semibold text-foreground">{endRange}</span> dari{" "}
+        <span className="font-semibold text-foreground">{totalItems}</span> lobby
+      </p>
+      
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={currentPage === 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          className="inline-flex h-9 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Sebelumnya
+        </button>
+
+        {getPageNumbers().map((page) => (
+          <button
+            key={page}
+            type="button"
+            onClick={() => onPageChange(page)}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold transition ${
+              currentPage === page
+                ? "bg-primary text-white shadow-sm"
+                : "border border-primary/10 bg-white text-primary hover:bg-secondary"
+            }`}
+          >
+            {page}
+          </button>
+        ))}
+
+        <button
+          type="button"
+          disabled={currentPage === totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          className="inline-flex h-9 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-sm font-semibold text-primary hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          Selanjutnya
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
 }

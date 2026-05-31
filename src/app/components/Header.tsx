@@ -13,8 +13,8 @@ export function Header() {
   const navLinks = [
     { label: 'Beranda', href: '#beranda' },
     { label: 'Mata Kuliah', href: '#matkul' },
-    { label: 'Katalog Tutor', href: '#katalog' },
     { label: 'Panduan', href: '#panduan' },
+        { label: 'Katalog Tutor', href: '#katalog' },
   ];
 
   return (
