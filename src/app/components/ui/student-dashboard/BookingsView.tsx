@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Banknote, ChevronLeft, ChevronRight, CircleCheck, Clock3, NotebookTabs, Timer, Users } from 'lucide-react';
+import { Banknote, ChevronLeft, ChevronRight, CircleCheck, Clock3, LogOut, NotebookTabs, Timer, Users } from 'lucide-react';
 import { usePersistentState } from '../../../../lib/browserState';
 import {
   formatCurrency,
   formatDate,
   formatTimeRange,
 } from '../../../../lib/dashboardData';
-import { MatchmakingLobby, MatchmakingLobbyStatus, payLobbyShare, forceLobbyToPendingPayment } from '../../../../lib/matchmakingData';
+import { MatchmakingLobby, MatchmakingLobbyStatus, payLobbyShare } from '../../../../lib/matchmakingData';
 import { LobbyDetailModal } from '../tutor-dashboard/SlotCard';
 
 type BookingTab = 'Semua' | 'Mendatang' | 'Selesai' | 'Dibatalkan' | 'Menunggu Pembayaran';
@@ -129,16 +129,29 @@ export function BookingsView({
     }
   };
 
-  const handleForceLock = async (lobbyId: string) => {
-    try {
-      await forceLobbyToPendingPayment(lobbyId);
-      if (onRefresh) {
-        await onRefresh();
-      }
-    } catch (error) {
-      onPayError(error instanceof Error ? error.message : 'Gagal mensimulasikan lobby penuh.');
+  // Track which lobbies the user has dismissed the payment modal for (so Batal actually closes it)
+  const [dismissedLobbyIds, setDismissedLobbyIds] = useState<Set<string>>(new Set());
+
+  // Clean up dismissed IDs when lobby status changes (e.g., already paid or no longer exists)
+  useEffect(() => {
+    setDismissedLobbyIds((prev) => {
+      const currentIds = new Set(joinedLobbies.map((l) => l.id));
+      const next = new Set([...prev].filter((id) => currentIds.has(id)));
+      if (next.size !== prev.size) return next;
+      return prev;
+    });
+  }, [joinedLobbies]);
+
+  // Auto-show payment modal for the first unpaid pending_payment lobby
+  useEffect(() => {
+    if (paymentModalLobby) return;
+    const unpaidLobby = joinedLobbies.find(
+      (l) => l.status === 'pending_payment' && !l.current_user_has_paid && !dismissedLobbyIds.has(l.id)
+    );
+    if (unpaidLobby) {
+      setPaymentModalLobby(unpaidLobby);
     }
-  };
+  }, [joinedLobbies, paymentModalLobby, dismissedLobbyIds]);
 
   return (
     <section>
@@ -182,7 +195,6 @@ export function BookingsView({
               onLeave={onLeaveLobby}
               onShowDetail={() => setActiveLobbyDetail(lobby)}
               onPay={() => setPaymentModalLobby(lobby)}
-              onForceLock={handleForceLock}
             />
           ))}
           <PaginationControls
@@ -251,7 +263,7 @@ export function BookingsView({
             <div className="flex gap-3 justify-end">
               <button
                 type="button"
-                onClick={() => setPaymentModalLobby(null)}
+                onClick={() => { setPaymentModalLobby(null); setDismissedLobbyIds((prev) => new Set(prev).add(paymentModalLobby.id)); }}
                 disabled={isPaying}
                 className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition disabled:opacity-50"
               >
@@ -292,14 +304,13 @@ export function JoinedLobbyRow({
   onLeave,
   onShowDetail,
   onPay,
-  onForceLock,
 }: {
   lobby: MatchmakingLobby;
   onLeave: (lobbyId: string) => void;
   onShowDetail: () => void;
   onPay?: () => void;
-  onForceLock?: (lobbyId: string) => void;
 }) {
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const memberCount = lobby.member_count ?? 0;
   const canLeave = lobby.status !== 'completed' && lobby.status !== 'cancelled' && lobby.status !== 'expired';
   const canPay = lobby.status === 'pending_payment' && !lobby.current_user_has_paid;
@@ -356,15 +367,6 @@ export function JoinedLobbyRow({
           >
             Lihat Detail
           </button>
-          {lobby.status === 'open' && onForceLock && (
-            <button
-              type="button"
-              onClick={() => onForceLock(lobby.id)}
-              className="h-10 rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 hover:border-amber-300"
-            >
-              Simulasikan Penuh
-            </button>
-          )}
           {canPay && onPay && (
             <button
               type="button"
@@ -377,7 +379,7 @@ export function JoinedLobbyRow({
           {canLeave && (
             <button
               type="button"
-              onClick={() => onLeave(lobby.id)}
+              onClick={() => setShowLeaveConfirm(true)}
               className="h-10 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-300"
             >
               Keluar
@@ -385,6 +387,40 @@ export function JoinedLobbyRow({
           )}
         </div>
       </div>
+
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <LogOut className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-foreground">Keluar dari Lobby?</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Apakah kamu yakin ingin keluar dari lobby <span className="font-semibold text-foreground">{lobby.title}</span>? Kamu perlu bergabung ulang dengan kode jika ingin kembali.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowLeaveConfirm(false)}
+                className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowLeaveConfirm(false); onLeave(lobby.id); }}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition"
+              >
+                Ya, Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

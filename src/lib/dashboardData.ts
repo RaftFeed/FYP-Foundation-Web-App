@@ -23,6 +23,7 @@ export interface Subject {
 
 export interface SubjectMatchmakingSummary extends Subject {
   matchmaking_count: number;
+  slot_count: number;
 }
 
 export interface TutorProfile {
@@ -194,7 +195,15 @@ export async function fetchSubjectMatchmakingSummaries() {
     .order('name', { ascending: true });
 
   if (!error) {
-    return (data ?? []) as SubjectMatchmakingSummary[];
+    return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id ?? ''),
+      name: String(row.name ?? ''),
+      code: row.code ? String(row.code) : null,
+      description: row.description ? String(row.description) : null,
+      created_at: String(row.created_at ?? ''),
+      matchmaking_count: Number(row.matchmaking_count ?? 0),
+      slot_count: Number(row.slot_count ?? 0),
+    }));
   }
 
   const { data: fallbackData, error: fallbackError } = await supabase
@@ -223,6 +232,7 @@ export async function fetchSubjectMatchmakingSummaries() {
     matchmaking_count: (subject.matchmaking_lobbies ?? []).filter((lobby) =>
       ['open', 'pending_payment', 'paid'].includes(lobby.status),
     ).length,
+    slot_count: 0,
   }));
 }
 

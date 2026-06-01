@@ -10,11 +10,14 @@ import {
   createMatchmakingLobby,
   fetchAvailableTutorSlots,
   fetchMatchmakingLobbies,
+  forceLobbyToPendingPayment,
   joinMatchmakingLobby,
+  payLobbyShare,
 } from '../../lib/matchmakingData';
 import { useLobbyRealtime } from '../../lib/useLobbyRealtime';
 import { LobbyDetailModal } from './ui/tutor-dashboard/SlotCard';
 import { formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
+import { supabase } from '../../lib/supabase';
 
 const statusLabels: Record<MatchmakingLobby['status'], string> = {
   open: 'Mencari Anggota',
@@ -76,7 +79,6 @@ const initialForm = {
   visibility: 'public' as MatchmakingLobbyVisibility,
   minParticipants: 1,
   maxParticipants: 10,
-  timerHours: 6,
 };
 
 export function MatchmakingLobbyView({
@@ -104,6 +106,8 @@ export function MatchmakingLobbyView({
   const [form, setForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:create-form` : null, initialForm);
   const [activeModal, setActiveModal] = useState<'create' | 'join' | null>(null);
   const [activeLobbyDetail, setActiveLobbyDetail] = useState<MatchmakingLobby | null>(null);
+  const [paymentLobby, setPaymentLobby] = useState<MatchmakingLobby | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
 
   const showNotice = (tone: NoticeModalState['tone'], message: string) => {
     setNotice({ tone, message });
@@ -282,6 +286,80 @@ export function MatchmakingLobbyView({
     }
   };
 
+  const ensureSlotAvailable = async (slotId: string): Promise<string> => {
+    // Check the current slot status. If already 'available', return as-is.
+    const { data: slotRow } = await supabase
+      .from('tutor_availability_slots')
+      .select('status')
+      .eq('id', slotId)
+      .maybeSingle();
+    if (slotRow?.status === 'available') {
+      return slotId;
+    }
+
+    // Slot is 'held' (or another non-available status). This happens when a
+    // previous lobby was fully vacated but the slot could not be reset because
+    // RLS blocks students from updating tutor_availability_slots.
+    // Strategy: cancel + re-create the slot via RPCs (run as SECURITY DEFINER,
+    // bypassing RLS entirely). Returns the new slot ID.
+    if (slotRow?.status === 'held' || slotRow?.status === 'cancelled') {
+      // Verify no active lobby still uses this slot
+      const { count } = await supabase
+        .from('matchmaking_lobbies')
+        .select('id', { count: 'exact', head: true })
+        .eq('availability_slot_id', slotId)
+        .in('status', ['open', 'pending_payment', 'paid']);
+      if (!count || count === 0) {
+        // Fetch full slot data so we can re-create it identically
+        const { data: fullSlot } = await supabase
+          .from('tutor_availability_slots')
+          .select('*')
+          .eq('id', slotId)
+          .maybeSingle();
+        if (fullSlot) {
+          // Cancel the old slot via RPC (bypasses RLS)
+          const { error: cancelErr } = await supabase.rpc('cancel_tutor_availability', {
+            target_slot_id: slotId,
+          });
+          if (cancelErr) throw cancelErr;
+          // Re-create with identical data via RPC (bypasses RLS, returns new ID)
+          const { error: createErr } = await supabase.rpc('create_tutor_availability', {
+            p_subject_id: fullSlot.subject_id,
+            p_starts_at: fullSlot.starts_at,
+            p_ends_at: fullSlot.ends_at,
+            p_price_total: fullSlot.price_total,
+            p_max_participants: fullSlot.max_participants,
+            p_location: fullSlot.location || 'Online',
+            p_meeting_url: fullSlot.meeting_url || null,
+            p_notes: fullSlot.notes || null,
+            p_recurrence_group_id: fullSlot.recurrence_group_id ?? null,
+            p_recurrence_pattern: fullSlot.recurrence_pattern ?? 'none',
+            p_recurrence_index: fullSlot.recurrence_index ?? 0,
+          });
+          if (createErr) throw createErr;
+
+          // Fetch the newly created slot to get its ID
+          // (match by unique combination: tutor, subject, starts_at)
+          const { data: newSlot } = await supabase
+            .from('tutor_availability_slots')
+            .select('id')
+            .eq('tutor_profile_id', fullSlot.tutor_profile_id)
+            .eq('subject_id', fullSlot.subject_id)
+            .eq('starts_at', fullSlot.starts_at)
+            .eq('status', 'available')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (newSlot?.id) {
+            return newSlot.id;
+          }
+        }
+      }
+    }
+
+    return slotId;
+  };
+
   const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -290,22 +368,83 @@ export function MatchmakingLobbyView({
       return;
     }
 
-    const expiresAt = new Date(Date.now() + Math.max(form.timerHours, 1) * 60 * 60 * 1000).toISOString();
-    await runAction(
-      () =>
-        createMatchmakingLobby({
-          availabilitySlotId: form.availabilitySlotId,
-          title: form.title,
-          description: form.description,
-          visibility: form.visibility,
-          minParticipants: Number(form.minParticipants),
-          maxParticipants: Number(form.maxParticipants),
-          expiresAt,
-        }),
-      'Lobby grup berhasil dibuat. Bagikan kode lobby ke temanmu.',
-    );
-    setForm(initialForm);
-    setActiveModal(null);
+    setIsSubmitting(true);
+    setNotice(null);
+    try {
+      // Pre-flight: ensure the slot is 'available' in the DB.
+      // If a previous lobby vacated the slot but RLS blocked the status reset,
+      // this will cancel + re-create the slot via RPCs (SECURITY DEFINER).
+      const effectiveSlotId = await ensureSlotAvailable(form.availabilitySlotId);
+
+      // Create lobby with a far-future expires_at so the old RPC doesn't override it.
+      // The actual payment timer is set by force_lobby_to_pending_payment (NOW + 1 hour).
+      const farFuture = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await createMatchmakingLobby({
+        availabilitySlotId: effectiveSlotId,
+        title: form.title,
+        description: form.description,
+        visibility: form.visibility,
+        minParticipants: Number(form.minParticipants),
+        maxParticipants: Number(form.maxParticipants),
+        expiresAt: farFuture,
+      });
+
+      // Refresh to get the newly created lobby
+      const updatedLobbies = await fetchMatchmakingLobbies();
+      const myNewLobby = updatedLobbies.find(
+        (l) => l.creator_id === user?.id && l.availability_slot_id === form.availabilitySlotId && l.status === 'open'
+      );
+
+      if (myNewLobby) {
+        // Force the lobby to pending_payment (triggers 1-hour timer for all members)
+        await forceLobbyToPendingPayment(myNewLobby.id);
+
+        // Refresh again to get updated status
+        const refreshedLobbies = await fetchMatchmakingLobbies();
+        const pendingLobby = refreshedLobbies.find((l) => l.id === myNewLobby.id);
+        if (pendingLobby) {
+          setPaymentLobby(pendingLobby);
+        }
+      }
+
+      showNotice('success', 'Lobby dibuat! Segera selesaikan pembayaran dalam 1 jam.');
+      onLobbyChange?.();
+      setForm(initialForm);
+      setActiveModal(null);
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal membuat lobby.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleJoinLobby = async (code: string) => {
+    setIsSubmitting(true);
+    setNotice(null);
+    try {
+      await joinMatchmakingLobby(code);
+
+      const updatedLobbies = await fetchMatchmakingLobbies();
+      const joinedLobby = updatedLobbies.find(
+        (l) => l.code === code.toUpperCase() && l.current_user_is_member
+      );
+
+      if (joinedLobby) {
+        await forceLobbyToPendingPayment(joinedLobby.id);
+        const refreshedLobbies = await fetchMatchmakingLobbies();
+        const pendingLobby = refreshedLobbies.find((l) => l.id === joinedLobby.id);
+        if (pendingLobby) {
+          setPaymentLobby(pendingLobby);
+        }
+      }
+
+      showNotice('success', 'Bergabung! Segera selesaikan pembayaran dalam 1 jam.');
+      onLobbyChange?.();
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal bergabung ke lobby.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleJoinByCode = async (event: FormEvent) => {
@@ -315,9 +454,49 @@ export function MatchmakingLobbyView({
       return;
     }
 
-    await runAction(async () => joinMatchmakingLobby(joinCode), 'Berhasil bergabung ke lobby grup.');
-    setJoinCode('');
-    setActiveModal(null);
+    setIsSubmitting(true);
+    setNotice(null);
+    try {
+      await joinMatchmakingLobby(joinCode.trim());
+
+      const updatedLobbies = await fetchMatchmakingLobbies();
+      const joinedLobby = updatedLobbies.find(
+        (l) => l.code === joinCode.trim().toUpperCase() && l.current_user_is_member
+      );
+
+      if (joinedLobby) {
+        await forceLobbyToPendingPayment(joinedLobby.id);
+        const refreshedLobbies = await fetchMatchmakingLobbies();
+        const pendingLobby = refreshedLobbies.find((l) => l.id === joinedLobby.id);
+        if (pendingLobby) {
+          setPaymentLobby(pendingLobby);
+        }
+      }
+
+      showNotice('success', 'Bergabung! Segera selesaikan pembayaran dalam 1 jam.');
+      onLobbyChange?.();
+      setJoinCode('');
+      setActiveModal(null);
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal bergabung ke lobby.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePay = async (lobby: MatchmakingLobby) => {
+    setIsPaying(true);
+    try {
+      await payLobbyShare(lobby.id);
+      setPaymentLobby(null);
+      showNotice('success', 'Pembayaran berhasil! Kelas aktif.');
+      await loadData();
+      onLobbyChange?.();
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal memproses pembayaran.');
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   return (
@@ -460,7 +639,7 @@ export function MatchmakingLobbyView({
                   lobby={lobby}
                   isSubmitting={isSubmitting}
                   onCopy={() => setCopyToast('Kode lobby disalin')}
-                  onJoin={() => runAction(() => joinMatchmakingLobby(lobby.code), 'Berhasil bergabung ke lobby grup.')}
+                  onJoin={() => handleJoinLobby(lobby.code)}
                   onShowDetail={() => setActiveLobbyDetail(lobby)}
                 />
               ))}
@@ -522,7 +701,7 @@ export function MatchmakingLobbyView({
             />
           </label>
 
-          <div className="mb-3 grid grid-cols-2 gap-3">
+          <div className="mb-3">
             <label className="block">
               <span className="mb-1 block text-sm font-semibold text-foreground">Tipe</span>
               <select
@@ -534,19 +713,11 @@ export function MatchmakingLobbyView({
                 <option value="private">Private</option>
               </select>
             </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-foreground">Timer</span>
-              <select
-                value={String(form.timerHours)}
-                onChange={(event) => setForm({ ...form, timerHours: Number(event.target.value) })}
-                className="h-11 w-full rounded-lg border border-primary/20 bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="24">1 hari</option>
-                <option value="48">2 hari</option>
-                <option value="72">3 hari</option>
-                <option value="168">7 hari</option>
-              </select>
-            </label>
+          </div>
+
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+            <p className="font-semibold text-amber-800">⏳ Timer Pembayaran: 1 Jam</p>
+            <p className="mt-0.5 text-xs text-amber-700">Setelah lobby dibuat, kamu harus membayar dalam 1 jam. Timer dimulai saat lobby masuk fase pembayaran.</p>
           </div>
 
           <div className="mb-4 grid grid-cols-2 gap-3">
@@ -576,9 +747,9 @@ export function MatchmakingLobbyView({
 
           {selectedSlot && (
             <div className="mb-4 rounded-lg border border-primary/10 bg-secondary p-3 text-sm font-medium text-foreground">
-              <p className="font-semibold text-primary">{formatCurrency(selectedSlot.price_total)} total kelas</p>
+              <p className="font-semibold text-primary">{formatCurrency(selectedSlot.price_total)} / siswa</p>
               <p className="mt-1 text-muted-foreground">
-                Estimasi {formatCurrency(Math.ceil(selectedSlot.price_total / Math.max(form.maxParticipants, 1)))} per orang jika penuh.
+                Harga tetap per siswa, tidak bergantung jumlah peserta.
               </p>
             </div>
           )}
@@ -624,6 +795,87 @@ export function MatchmakingLobbyView({
 
       {activeLobbyDetail && (
         <LobbyDetailModal lobby={activeLobbyDetail} onClose={() => setActiveLobbyDetail(null)} />
+      )}
+
+      {paymentLobby && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
+            <h2 className="mb-2 text-xl font-extrabold tracking-normal text-foreground">Pembayaran Kelas</h2>
+            <p className="mb-4 text-sm font-medium text-muted-foreground">
+              Selesaikan pembayaran untuk lobby <span className="font-bold text-foreground">{paymentLobby.title}</span>
+            </p>
+
+            <div className="mb-4 space-y-2 rounded-lg border border-primary/10 bg-secondary/50 p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Mata Kuliah</span>
+                <span className="font-semibold text-foreground">{paymentLobby.subject_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Tutor</span>
+                <span className="font-semibold text-foreground">{paymentLobby.tutor_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Jadwal</span>
+                <span className="font-semibold text-foreground">{formatDate(paymentLobby.starts_at)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Waktu</span>
+                <span className="font-semibold text-foreground">{formatTimeRange(paymentLobby.starts_at, paymentLobby.ends_at)}</span>
+              </div>
+              <hr className="border-primary/10" />
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Total Kelas</span>
+                <span className="font-semibold text-foreground">{formatCurrency(paymentLobby.price_total)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Peserta Maks</span>
+                <span className="font-semibold text-foreground">{paymentLobby.max_participants} orang</span>
+              </div>
+              <hr className="border-primary/10" />
+              <div className="flex items-center justify-between text-base">
+                <span className="font-bold text-primary">Bagianmu</span>
+                <span className="font-extrabold text-primary">{formatCurrency(paymentLobby.price_per_member)}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 mb-5">
+              <div className="text-sm">
+                <p className="font-semibold text-amber-800 mb-1">⏳ Batas Waktu Pembayaran</p>
+                <p className="text-amber-700">Segera selesaikan pembayaran sebelum waktu habis.</p>
+              </div>
+              <LobbyCountdown expiresAt={paymentLobby.expires_at} />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setPaymentLobby(null)}
+                disabled={isPaying}
+                className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePay(paymentLobby)}
+                disabled={isPaying}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPaying ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    <Banknote className="h-4 w-4" />
+                    Bayar {formatCurrency(paymentLobby.price_per_member)}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
@@ -693,11 +945,6 @@ function LobbyCard({
       <div className="flex flex-col justify-between gap-3 border-t border-primary/10 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
         <div>
           <p className="text-sm font-semibold text-foreground">{formatCurrency(lobby.price_per_member)} / siswa</p>
-          <p className="mt-0.5 text-xs font-medium text-muted-foreground">
-            {lobby.price_per_member !== lobby.price_if_full && (
-              <><span className="text-green-600">{formatCurrency(lobby.price_if_full)}</span> jika penuh</>
-            )}
-          </p>
           <p className="mt-1 text-xs font-medium text-muted-foreground">Kode Kelas</p>
           <button
             type="button"
@@ -762,21 +1009,25 @@ function ModalFrame({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-extrabold tracking-normal text-foreground">{title}</h2>
-            <p className="mt-1 text-sm font-medium text-muted-foreground">{description}</p>
+      <div className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-2xl border border-primary/10 bg-white shadow-xl">
+        <div className="flex-shrink-0 p-5 pb-0">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-extrabold tracking-normal text-foreground">{title}</h2>
+              <p className="mt-1 text-sm font-medium text-muted-foreground">{description}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-primary/20 px-3 py-2 text-sm font-semibold text-primary hover:bg-secondary"
+            >
+              Tutup
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-primary/20 px-3 py-2 text-sm font-semibold text-primary hover:bg-secondary"
-          >
-            Tutup
-          </button>
         </div>
-        {children}
+        <div className="flex-1 overflow-y-auto p-5 pt-4">
+          {children}
+        </div>
       </div>
     </div>
   );
