@@ -18,6 +18,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 import { useAuth } from '../context/AuthContext';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { Subject, fetchSubjects, formatCurrency, formatDate, formatTimeRange } from '../../lib/dashboardData';
+import { fetchTutorPayments, type TutorPayment } from '../../lib/paymentsReports';
 import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
 import { SlotCard, StudentListModal } from './ui/tutor-dashboard/SlotCard';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
@@ -110,6 +111,7 @@ export function TutorDashboard() {
   const [newPassword, setNewPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [tutorPayments, setTutorPayments] = useState<TutorPayment[]>([]);
 
   const showNotice = (tone: NoticeModalState['tone'], message: string) => {
     setNotice({ tone, message });
@@ -118,7 +120,7 @@ export function TutorDashboard() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([loadTutorData(), loadSlots()]);
+      await Promise.all([loadTutorData(), loadSlots(), loadTutorPayments()]);
     } finally {
       setIsRefreshing(false);
     }
@@ -134,7 +136,12 @@ export function TutorDashboard() {
   const availableSlots = slots.filter((slot) => slot.status === 'available');
   const bookedSlots = slots.filter((slot) => slot.status === 'booked');
   const heldSlots = slots.filter((slot) => slot.status === 'held');
-  const monthlyRevenue = currentSlots.reduce((sum, slot) => sum + slot.price_total, 0);
+  const monthlyRevenue = tutorPayments
+    .filter((p) => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0);
+  const refundedAmount = tutorPayments
+    .filter((p) => p.status === 'refunded')
+    .reduce((sum, p) => sum + p.amount, 0);
 
   const loadTutorData = async () => {
     if (!user) {
@@ -207,8 +214,20 @@ export function TutorDashboard() {
     }
   };
 
+  const loadTutorPayments = async () => {
+    if (!user) return;
+    try {
+      const payments = await fetchTutorPayments(user.id);
+      setTutorPayments(payments);
+    } catch (error) {
+      // Non-critical: payments may fail if tutor has no payments yet
+      console.warn('Failed to load tutor payments:', error);
+    }
+  };
+
   useEffect(() => {
     void loadTutorData();
+    void loadTutorPayments();
   }, [user?.id]);
 
   useEffect(() => {
@@ -546,10 +565,12 @@ export function TutorDashboard() {
                 isLoading={isLoading}
                 monthlyRevenue={monthlyRevenue}
                 netRevenue={monthlyRevenue * 0.8}
+                refundedAmount={refundedAmount}
                 availableSlots={availableSlots.length}
                 bookedSlots={bookedSlots.length}
                 heldSlots={heldSlots.length}
                 totalSlots={currentSlots.length}
+                tutorPayments={tutorPayments}
                 setActiveView={setActiveView}
                 slots={slots}
               />
@@ -754,10 +775,12 @@ function DashboardView({
   isLoading,
   monthlyRevenue,
   netRevenue,
+  refundedAmount,
   availableSlots,
   bookedSlots,
   heldSlots,
   totalSlots,
+  tutorPayments,
   setActiveView,
   slots,
 }: {
@@ -766,10 +789,12 @@ function DashboardView({
   isLoading: boolean;
   monthlyRevenue: number;
   netRevenue: number;
+  refundedAmount: number;
   availableSlots: number;
   bookedSlots: number;
   heldSlots: number;
   totalSlots: number;
+  tutorPayments: TutorPayment[];
   setActiveView: (view: TutorView) => void;
   slots: TutorAvailabilitySlot[];
 }) {
@@ -783,16 +808,16 @@ function DashboardView({
 
   const revenueByDate = useMemo(() => {
     const data: Record<string, number> = {};
-    for (const slot of slots) {
-      if (slot.status !== 'cancelled') {
-        const dateKey = slot.starts_at.slice(0, 10);
-        data[dateKey] = (data[dateKey] || 0) + (slot.price_total * 0.8);
+    for (const payment of tutorPayments) {
+      if (payment.status === 'paid' && payment.paid_at) {
+        const dateKey = payment.paid_at.slice(0, 10);
+        data[dateKey] = (data[dateKey] || 0) + (payment.amount * 0.8);
       }
     }
     const labels = Object.keys(data).sort();
     const values = labels.map((label) => data[label]);
     return { labels, values };
-  }, [slots]);
+  }, [tutorPayments]);
 
   const chartData = {
     labels: revenueByDate.labels,
@@ -815,10 +840,10 @@ function DashboardView({
   };
 
   const stats = [
-    { label: 'Slot Aktif', value: String(totalSlots), view: 'slots' as TutorView },
-    { label: 'Tersedia', value: String(availableSlots), view: 'schedule' as TutorView },
-    { label: 'Terbooking', value: String(bookedSlots), view: 'schedule' as TutorView },
+    { label: 'Pendapatan Kotor', value: formatCurrency(monthlyRevenue), view: 'slots' as TutorView, wide: true },
     { label: 'Pendapatan Bersih', value: formatCurrency(netRevenue), view: 'slots' as TutorView, wide: true },
+    { label: 'Dana Dikembalikan', value: formatCurrency(refundedAmount), view: 'slots' as TutorView, wide: true },
+    { label: 'Total Kelas', value: String(tutorPayments.filter((p) => p.status === 'paid').length), view: 'slots' as TutorView },
   ];
 
   return (
@@ -1181,82 +1206,86 @@ function SlotManagementView({
 
       {isFormModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-primary/10 bg-white p-6 shadow-xl">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
-                  <BookOpen className="h-5 w-5" />
+          <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-primary/10 bg-white shadow-xl">
+            <div className="shrink-0 border-b border-primary/10 p-5 pb-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
+                    <BookOpen className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-extrabold text-foreground">Tambah Slot</h2>
+                    <p className="text-xs font-medium text-muted-foreground">Bisa dibuat sekali atau diulang mingguan</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-extrabold text-foreground">Tambah Slot</h2>
-                  <p className="text-xs font-medium text-muted-foreground">Bisa dibuat sekali atau diulang mingguan</p>
-                </div>
+                <button type="button" onClick={handleCloseForm} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Tutup">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button type="button" onClick={handleCloseForm} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Tutup">
-                <X className="h-4 w-4" />
-              </button>
             </div>
-            <form onSubmit={(e) => { onSubmit(e); handleCloseForm(); }}>
-              <TutorSelect label="Mata kuliah" value={slotForm.subjectId} onChange={(value) => setSlotForm({ ...slotForm, subjectId: value })} required>
-                <option value="">Pilih mata kuliah</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </TutorSelect>
-              <TutorTextInput label="Tanggal mulai" type="date" value={slotForm.date} onChange={(value) => setSlotForm({ ...slotForm, date: value })} required />
-              <div className="grid grid-cols-2 gap-3">
-                <TutorTextInput label="Mulai" type="time" value={slotForm.startTime} onChange={(value) => setSlotForm({ ...slotForm, startTime: value })} required />
-                <TutorTextInput label="Selesai" type="time" value={slotForm.endTime} onChange={(value) => setSlotForm({ ...slotForm, endTime: value })} required />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <TutorTextInput label="Harga total" type="number" value={String(slotForm.priceTotal)} onChange={(value) => setSlotForm({ ...slotForm, priceTotal: Number(value) })} />
-                <TutorTextInput label="Maks siswa" type="number" value={String(slotForm.maxParticipants)} onChange={(value) => setSlotForm({ ...slotForm, maxParticipants: Number(value) })} />
-              </div>
-              <TutorTextInput label="Lokasi" value={slotForm.location} onChange={(value) => setSlotForm({ ...slotForm, location: value })} />
-              <TutorTextInput label="Link meeting" value={slotForm.meetingUrl} onChange={(value) => setSlotForm({ ...slotForm, meetingUrl: value })} />
-              <label className="mb-4 block">
-                <span className="mb-1 block text-sm font-semibold text-foreground">Catatan</span>
-                <textarea
-                  value={slotForm.notes}
-                  onChange={(event) => setSlotForm({ ...slotForm, notes: event.target.value })}
-                  rows={3}
-                  className="w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </label>
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <TutorSelect
-                  label="Pola jadwal"
-                  value={slotRepeatMode}
-                  onChange={(value) => setSlotForm({ ...slotForm, repeatMode: value === 'weekly' ? 'weekly' : 'once' })}
-                >
-                  <option value="once">Sekali saja</option>
-                  <option value="weekly">Ulang mingguan</option>
+            <div className="flex-1 overflow-y-auto p-5 pt-4">
+              <form onSubmit={(e) => { onSubmit(e); handleCloseForm(); }}>
+                <TutorSelect label="Mata kuliah" value={slotForm.subjectId} onChange={(value) => setSlotForm({ ...slotForm, subjectId: value })} required>
+                  <option value="">Pilih mata kuliah</option>
+                  {subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
                 </TutorSelect>
-                {slotRepeatMode === 'weekly' && (
-                  <TutorTextInput
-                    label="Jumlah minggu"
-                    type="number"
-                    value={String(slotForm.repeatWeeks ?? 4)}
-                    onChange={(value) => setSlotForm({ ...slotForm, repeatWeeks: Number(value) })}
+                <TutorTextInput label="Tanggal mulai" type="date" value={slotForm.date} onChange={(value) => setSlotForm({ ...slotForm, date: value })} required />
+                <div className="grid grid-cols-2 gap-3">
+                  <TutorTextInput label="Mulai" type="time" value={slotForm.startTime} onChange={(value) => setSlotForm({ ...slotForm, startTime: value })} required />
+                  <TutorTextInput label="Selesai" type="time" value={slotForm.endTime} onChange={(value) => setSlotForm({ ...slotForm, endTime: value })} required />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <TutorTextInput label="Harga total" type="number" value={String(slotForm.priceTotal)} onChange={(value) => setSlotForm({ ...slotForm, priceTotal: Number(value) })} />
+                  <TutorTextInput label="Maks siswa" type="number" value={String(slotForm.maxParticipants)} onChange={(value) => setSlotForm({ ...slotForm, maxParticipants: Number(value) })} />
+                </div>
+                <TutorTextInput label="Lokasi" value={slotForm.location} onChange={(value) => setSlotForm({ ...slotForm, location: value })} />
+                <TutorTextInput label="Link meeting" value={slotForm.meetingUrl} onChange={(value) => setSlotForm({ ...slotForm, meetingUrl: value })} />
+                <label className="mb-4 block">
+                  <span className="mb-1 block text-sm font-semibold text-foreground">Catatan</span>
+                  <textarea
+                    value={slotForm.notes}
+                    onChange={(event) => setSlotForm({ ...slotForm, notes: event.target.value })}
+                    rows={3}
+                    className="w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
-                )}
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button type="button" onClick={handleCloseForm} className="h-10 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary hover:bg-secondary transition">
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  Tambah Slot
-                </button>
-              </div>
-            </form>
+                </label>
+                <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                  <TutorSelect
+                    label="Pola jadwal"
+                    value={slotRepeatMode}
+                    onChange={(value) => setSlotForm({ ...slotForm, repeatMode: value === 'weekly' ? 'weekly' : 'once' })}
+                  >
+                    <option value="once">Sekali saja</option>
+                    <option value="weekly">Ulang mingguan</option>
+                  </TutorSelect>
+                  {slotRepeatMode === 'weekly' && (
+                    <TutorTextInput
+                      label="Jumlah minggu"
+                      type="number"
+                      value={String(slotForm.repeatWeeks ?? 4)}
+                      onChange={(value) => setSlotForm({ ...slotForm, repeatWeeks: Number(value) })}
+                    />
+                  )}
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button type="button" onClick={handleCloseForm} className="h-10 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary hover:bg-secondary transition">
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Tambah Slot
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

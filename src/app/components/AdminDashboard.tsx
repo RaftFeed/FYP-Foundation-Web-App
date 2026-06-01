@@ -25,7 +25,7 @@ import {
 } from '../../lib/dashboardData';
 import { supabase } from '../../lib/supabase';
 import { TutorAvailabilitySlot, MatchmakingLobby, fetchAdminTutorAvailability, fetchLobbyStudents, fetchMatchmakingLobbies, SlotStudent } from '../../lib/matchmakingData';
-import { Report, fetchReports, PaidPayment, fetchPaidPayments } from '../../lib/paymentsReports';
+import { Report, fetchReports, PaidPayment, fetchPaidPayments, fetchAllPaymentsWithTutorInfo } from '../../lib/paymentsReports';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import {
@@ -85,6 +85,7 @@ export function AdminDashboard() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [paidPayments, setPaidPayments] = useState<PaidPayment[]>([]);
+  const [allPayments, setAllPayments] = useState<PaidPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<NoticeModalState | null>(null);
   const [subjectForm, setSubjectForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:subject-form` : null, emptySubject);
@@ -148,7 +149,7 @@ export function AdminDashboard() {
     }
 
     try {
-      const [nextSubjects, nextTutors, nextSlots, nextLobbies, nextProfiles, nextReports, nextPaidPayments] = await Promise.all([
+      const [nextSubjects, nextTutors, nextSlots, nextLobbies, nextProfiles, nextReports, nextPaidPayments, nextAllPayments] = await Promise.all([
         fetchSubjects(),
         fetchTutorProfiles(),
         fetchAdminTutorAvailability(),
@@ -156,6 +157,7 @@ export function AdminDashboard() {
         fetchProfiles(),
         fetchReports(),
         fetchPaidPayments().catch(() => [] as PaidPayment[]),
+        fetchAllPaymentsWithTutorInfo().catch(() => [] as PaidPayment[]),
       ]);
       setSubjects(nextSubjects);
       setTutors(nextTutors);
@@ -164,6 +166,7 @@ export function AdminDashboard() {
       setProfiles(nextProfiles);
       setReports(nextReports);
       setPaidPayments(nextPaidPayments);
+      setAllPayments(nextAllPayments);
       if (cacheKey) {
         writeLocalCache(cacheKey, {
           subjects: nextSubjects,
@@ -496,7 +499,7 @@ export function AdminDashboard() {
             />
           )}
 
-          {activeTab === 'reports' && <ReportsPanel reports={reports} paidPayments={paidPayments} />}
+          {activeTab === 'reports' && <ReportsPanel reports={reports} paidPayments={paidPayments} allPayments={allPayments} />}
           {activeTab === 'profile' && (
             <ProfileView
               profileForm={profileForm}
@@ -1407,7 +1410,7 @@ function getPeriodSortKey(date: Date, period: ReportPeriod) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function ReportsPanel({ paidPayments, reports }: { paidPayments: PaidPayment[]; reports: Report[] }) {
+function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: PaidPayment[]; reports: Report[]; allPayments: PaidPayment[] }) {
   const [period, setPeriod] = useState<ReportPeriod>('month');
 
   const aggregated = useMemo(() => {
@@ -1443,6 +1446,12 @@ function ReportsPanel({ paidPayments, reports }: { paidPayments: PaidPayment[]; 
   const totalClasses = paidPayments.length;
   const totalRevenue = paidPayments.reduce((sum, p) => sum + p.amount, 0);
   const avgRevenue = totalClasses > 0 ? Math.round(totalRevenue / totalClasses) : 0;
+  const platformFee = Math.round(totalRevenue * 0.2);
+  const tutorNetIncome = Math.round(totalRevenue * 0.8);
+  const refundedTotal = allPayments
+    .filter((p) => p.status === 'refunded')
+    .reduce((sum, p) => sum + p.amount, 0);
+  const netRevenue = totalRevenue - refundedTotal;
 
   const barChartData = useMemo(() => ({
     labels: aggregated.map((a) => a.label),
@@ -1561,18 +1570,30 @@ function ReportsPanel({ paidPayments, reports }: { paidPayments: PaidPayment[]; 
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total Kelas</p>
           <p className="mt-2 text-3xl font-extrabold text-foreground">{totalClasses}</p>
         </div>
         <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total Pendapatan</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pendapatan Kotor</p>
           <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(totalRevenue)}</p>
         </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Fee Platform (20%)</p>
+          <p className="mt-2 text-3xl font-extrabold text-amber-700">{formatCurrency(platformFee)}</p>
+        </div>
+        <div className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Pendapatan Tutor (80%)</p>
+          <p className="mt-2 text-3xl font-extrabold text-green-700">{formatCurrency(tutorNetIncome)}</p>
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-700">Dana Dikembalikan</p>
+          <p className="mt-2 text-3xl font-extrabold text-red-700">{formatCurrency(refundedTotal)}</p>
+        </div>
         <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Rata-rata per Kelas</p>
-          <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(avgRevenue)}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pendapatan Bersih</p>
+          <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(netRevenue)}</p>
         </div>
       </div>
 

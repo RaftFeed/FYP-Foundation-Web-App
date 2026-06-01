@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { formatCurrency } from '../../../../lib/dashboardData';
 import { MatchmakingLobby, TutorAvailabilitySlot } from '../../../../lib/matchmakingData';
 import { JoinedLobbyRow } from './BookingsView';
+import { LobbyDetailModal } from '../tutor-dashboard/SlotCard';
 import { StudentView } from '../../StudentDashboard';
 
 export function DashboardView({
@@ -9,12 +11,15 @@ export function DashboardView({
   displayName,
   availableTutorSlots,
   setActiveView,
+  onLeaveLobby,
 }: {
   joinedLobbies: MatchmakingLobby[];
   displayName: string;
   availableTutorSlots: TutorAvailabilitySlot[];
   setActiveView: (view: StudentView) => void;
+  onLeaveLobby?: (lobbyId: string) => void;
 }) {
+  const [activeLobbyDetail, setActiveLobbyDetail] = useState<MatchmakingLobby | null>(null);
   const activeLobbies = joinedLobbies.filter((lobby) => lobby.status === 'open' || lobby.status === 'paid');
   const completedLobbies = joinedLobbies.filter((lobby) => lobby.status === 'completed');
   const pendingPayment = joinedLobbies.filter((lobby) => lobby.status === 'pending_payment');
@@ -67,8 +72,8 @@ export function DashboardView({
               <JoinedLobbyRow
                 key={lobby.id}
                 lobby={lobby}
-                onLeave={() => { }}
-                onShowDetail={() => { }}
+                onLeave={() => onLeaveLobby?.(lobby.id)}
+                onShowDetail={() => setActiveLobbyDetail(lobby)}
               />
             ))
           ) : (
@@ -78,6 +83,10 @@ export function DashboardView({
           )}
         </div>
       </section>
+
+      {activeLobbyDetail && (
+        <LobbyDetailModal lobby={activeLobbyDetail} onClose={() => setActiveLobbyDetail(null)} />
+      )}
     </section>
   );
 }

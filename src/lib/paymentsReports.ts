@@ -22,17 +22,20 @@ export async function fetchReports() {
 export interface PaidPayment {
   id: string;
   lobby_id: string;
+  student_id: string;
   amount: number;
   status: string;
   paid_at: string | null;
   created_at: string;
   lobby: {
+    id: string;
     title: string;
     subject_name: string;
     starts_at: string;
     ends_at: string;
-    price_per_member: number;
-    member_count: number;
+    max_participants: number;
+    price_total: number;
+    status: string;
   } | null;
 }
 
@@ -42,21 +45,116 @@ export async function fetchPaidPayments(): Promise<PaidPayment[]> {
     .select(`
       id,
       lobby_id,
+      student_id,
       amount,
       status,
       paid_at,
       created_at,
       lobby:matchmaking_lobbies (
+        id,
         title,
-        subject_name,
-        starts_at,
-        ends_at,
-        price_per_member,
-        member_count
+        subject:subjects ( name ),
+        slot:tutor_availability_slots ( starts_at, ends_at ),
+        max_participants,
+        price_total,
+        status
       )
     `)
     .eq('status', 'paid')
     .order('paid_at', { ascending: false, nullsLast: true });
   if (error) throw new Error(error.message);
-  return (data ?? []) as PaidPayment[];
+
+  return (data ?? []).map(mapPaymentRow);
+}
+
+export interface TutorPayment {
+  id: string;
+  lobby_id: string;
+  lobby_title: string;
+  amount: number;
+  status: string;
+  paid_at: string | null;
+  created_at: string;
+}
+
+export async function fetchTutorPayments(tutorUserId: string): Promise<TutorPayment[]> {
+  const { data, error } = await supabase
+    .from('matchmaking_lobby_payments')
+    .select(`
+      id,
+      lobby_id,
+      amount,
+      status,
+      paid_at,
+      created_at,
+      lobby:matchmaking_lobbies ( title )
+    `)
+    .eq('lobby.tutor_user_id', tutorUserId)
+    .in('status', ['paid', 'refunded'])
+    .order('paid_at', { ascending: false, nullsLast: true });
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    lobby_id: row.lobby_id,
+    lobby_title: row.lobby?.title ?? '-',
+    amount: row.amount,
+    status: row.status,
+    paid_at: row.paid_at,
+    created_at: row.created_at,
+  }));
+}
+
+export async function fetchAllPaymentsWithTutorInfo(): Promise<PaidPayment[]> {
+  const { data, error } = await supabase
+    .from('matchmaking_lobby_payments')
+    .select(`
+      id,
+      lobby_id,
+      student_id,
+      amount,
+      status,
+      paid_at,
+      created_at,
+      lobby:matchmaking_lobbies (
+        id,
+        title,
+        tutor_user_id,
+        tutor:tutor_profiles ( full_name ),
+        subject:subjects ( name ),
+        slot:tutor_availability_slots ( starts_at, ends_at ),
+        max_participants,
+        price_total,
+        status
+      )
+    `)
+    .in('status', ['paid', 'refunded'])
+    .order('paid_at', { ascending: false, nullsLast: true });
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map(mapPaymentRow);
+}
+
+function mapPaymentRow(row: any): PaidPayment {
+  return {
+    id: row.id,
+    lobby_id: row.lobby_id,
+    student_id: row.student_id,
+    amount: row.amount,
+    status: row.status,
+    paid_at: row.paid_at,
+    created_at: row.created_at,
+    lobby: row.lobby
+      ? {
+          id: row.lobby.id,
+          title: row.lobby.title ?? '-',
+          subject_name: row.lobby.subject?.name ?? 'Lainnya',
+          starts_at: row.lobby.slot?.starts_at ?? '',
+          ends_at: row.lobby.slot?.ends_at ?? '',
+          max_participants: row.lobby.max_participants ?? 0,
+          price_total: row.lobby.price_total ?? 0,
+          status: row.lobby.status ?? '',
+        }
+      : null,
+  };
 }

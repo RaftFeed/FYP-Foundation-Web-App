@@ -1,17 +1,20 @@
 import { useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { SubjectMatchmakingSummary } from '../../../../lib/dashboardData';
+import { TutorAvailabilitySlot } from '../../../../lib/matchmakingData';
 
 export function CoursesView({
   isLoading,
   query,
   subjects,
   setQuery,
+  availableTutorSlots,
 }: {
   isLoading: boolean;
   query: string;
   subjects: SubjectMatchmakingSummary[];
   setQuery: (query: string) => void;
+  availableTutorSlots: TutorAvailabilitySlot[];
 }) {
   const filteredSubjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -61,7 +64,8 @@ export function CoursesView({
           </div>
         )}
         {filteredSubjects.map((subject) => {
-          const hasMatchmaking = subject.matchmaking_count > 0;
+          const subjectSlotCount = availableTutorSlots.filter((slot) => slot.subject_id === subject.id).length;
+          const lobbyCount = subject.matchmaking_count;
 
           return (
             <article key={subject.id} className="rounded-xl border border-primary/10 bg-white p-5 shadow-md">
@@ -69,12 +73,14 @@ export function CoursesView({
                 <div>
                   <h3 className="text-lg font-extrabold text-foreground">{subject.name}</h3>
                 </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-bold ${hasMatchmaking ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
-                    }`}
-                >
-                  {subject.matchmaking_count} Slot Tutor
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${subjectSlotCount > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                    {subjectSlotCount} Slot Tutor
+                  </span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${lobbyCount > 0 ? 'bg-green-100 text-green-700' : 'bg-secondary text-muted-foreground'}`}>
+                    {lobbyCount} Lobby
+                  </span>
+                </div>
               </div>
 
               <div className="mb-1 flex items-center gap-2">
@@ -87,10 +93,15 @@ export function CoursesView({
                 {subject.description?.trim() || 'Deskripsi mata kuliah belum tersedia.'}
               </p>
 
-              <div className="mt-5 rounded-lg border border-primary/10 bg-secondary/60 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status Slot</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">
-                  {hasMatchmaking ? `Ada ${subject.matchmaking_count} slot tutor aktif untuk matkul ini.` : 'Belum ada slot tutor aktif untuk matkul ini.'}
+              <div className="mt-5 rounded-lg border border-primary/10 bg-secondary/60 p-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Ketersediaan</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {subjectSlotCount > 0
+                    ? `${subjectSlotCount} slot tutor tersedia`
+                    : 'Belum ada slot tutor'}
+                  {lobbyCount > 0
+                    ? ` · ${lobbyCount} lobby aktif`
+                    : ' · belum ada lobby aktif'}
                 </p>
               </div>
             </article>

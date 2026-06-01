@@ -250,19 +250,13 @@ function isMissingMatchmakingPaymentDependency(error: { code?: string; message?:
 }
 
 export async function refreshExpiredLobbies() {
-  const [expireRes, lockRes] = await Promise.all([
-    supabase.rpc('refresh_expired_matchmaking_lobbies'),
-    supabase.rpc('lock_lobbies_before_class'),
-  ]);
-
-  if (isMissingMatchmakingPaymentDependency(expireRes.error)) {
-    return;
-  }
+  await expireUnpaidAndCleanup();
 }
 
 export async function fetchAvailableTutorSlots() {
   await refreshExpiredLobbies();
 
+  // Fetch available slots + held slots (held = has a lobby that may have been deleted)
   const { data, error } = await supabase
     .from('tutor_availability_slots')
     .select(`
@@ -295,13 +289,36 @@ export async function fetchAvailableTutorSlots() {
         status
       )
     `)
-    .eq('status', 'available')
+    .in('status', ['available', 'held'])
     .eq('tutor.status', 'approved')
     .gte('starts_at', new Date().toISOString())
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows(data ?? []);
+
+  const allSlots = mapTutorAvailabilityRows(data ?? []);
+
+  // For held slots, check if there's still an active lobby. If not, the slot is free to use.
+  const heldSlots = allSlots.filter((s) => s.status === 'held');
+  if (heldSlots.length > 0) {
+    const heldSlotIds = heldSlots.map((s) => s.id);
+    const { data: activeLobbies } = await supabase
+      .from('matchmaking_lobbies')
+      .select('availability_slot_id')
+      .in('availability_slot_id', heldSlotIds)
+      .in('status', ['open', 'pending_payment', 'paid']);
+
+    const busySlotIds = new Set((activeLobbies ?? []).map((l: any) => l.availability_slot_id));
+    // Mark held slots without active lobbies as available
+    for (const slot of heldSlots) {
+      if (!busySlotIds.has(slot.id)) {
+        slot.status = 'available';
+      }
+    }
+  }
+
+  // Return only slots that are effectively available (original available + freed held slots)
+  return allSlots.filter((s) => s.status === 'available');
 }
 
 export async function fetchMyTutorAvailability(tutorUserId: string, startIso: string, endIso: string) {
@@ -343,7 +360,38 @@ export async function fetchMyTutorAvailability(tutorUserId: string, startIso: st
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows(data ?? []);
+
+  const allSlots = mapTutorAvailabilityRows(data ?? []);
+
+  // For held slots, check if there's still an active lobby. If not, reset to available.
+  const heldSlots = allSlots.filter((s) => s.status === 'held');
+  if (heldSlots.length > 0) {
+    const heldSlotIds = heldSlots.map((s) => s.id);
+    const { data: activeLobbies } = await supabase
+      .from('matchmaking_lobbies')
+      .select('availability_slot_id')
+      .in('availability_slot_id', heldSlotIds)
+      .in('status', ['open', 'pending_payment', 'paid']);
+
+    const busySlotIds = new Set((activeLobbies ?? []).map((l: any) => l.availability_slot_id));
+    const freedSlotIds: string[] = [];
+    for (const slot of heldSlots) {
+      if (!busySlotIds.has(slot.id)) {
+        slot.status = 'available';
+        freedSlotIds.push(slot.id);
+      }
+    }
+    // Persist the reset so create_matchmaking_lobby RPC won't reject the slot.
+    // Tutor has RLS access to update their own slots — this is the authoritative fix.
+    if (freedSlotIds.length > 0) {
+      await supabase
+        .from('tutor_availability_slots')
+        .update({ status: 'available', updated_at: new Date().toISOString() })
+        .in('id', freedSlotIds);
+    }
+  }
+
+  return allSlots;
 }
 
 export function isSlotExpired(slot: TutorAvailabilitySlot): boolean {
@@ -429,7 +477,28 @@ export async function fetchStudentTutorScheduleSlots() {
     .order('starts_at', { ascending: true });
 
   throwIfError(error);
-  return mapTutorAvailabilityRows(data ?? []);
+
+  const allSlots = mapTutorAvailabilityRows(data ?? []);
+
+  // For held slots, check if there's still an active lobby. If not, the slot is free.
+  const heldSlots = allSlots.filter((s) => s.status === 'held');
+  if (heldSlots.length > 0) {
+    const heldSlotIds = heldSlots.map((s) => s.id);
+    const { data: activeLobbies } = await supabase
+      .from('matchmaking_lobbies')
+      .select('availability_slot_id')
+      .in('availability_slot_id', heldSlotIds)
+      .in('status', ['open', 'pending_payment', 'paid']);
+
+    const busySlotIds = new Set((activeLobbies ?? []).map((l: any) => l.availability_slot_id));
+    for (const slot of heldSlots) {
+      if (!busySlotIds.has(slot.id)) {
+        slot.status = 'available';
+      }
+    }
+  }
+
+  return allSlots;
 }
 
 export async function fetchLobbyForSlot(slotId: string): Promise<MatchmakingLobby | null> {
@@ -532,12 +601,8 @@ export async function fetchLobbyForSlot(slotId: string): Promise<MatchmakingLobb
     min_participants: lobby.min_participants,
     max_participants: lobby.max_participants,
     price_total: Number(lobby.price_total ?? 0),
-    price_per_member: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max(memberCount + 1, 1),
-    ),
-    price_if_full: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max(lobby.max_participants, 1),
-    ),
+    price_per_member: Number(lobby.price_total ?? 0),
+    price_if_full: Number(lobby.price_total ?? 0),
     member_count: memberCount,
     expires_at: lobby.expires_at,
     current_user_is_member: isMember,
@@ -666,12 +731,8 @@ export async function fetchMatchmakingLobbies() {
     min_participants: lobby.min_participants,
     max_participants: lobby.max_participants,
     price_total: Number(lobby.price_total ?? 0),
-    price_per_member: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max((memberCounts.get(lobby.id) ?? 0) + 1, 1),
-    ),
-    price_if_full: Math.ceil(
-      Number(lobby.price_total ?? 0) / Math.max(lobby.max_participants, 1),
-    ),
+    price_per_member: Number(lobby.price_total ?? 0),
+    price_if_full: Number(lobby.price_total ?? 0),
     member_count: memberCounts.get(lobby.id) ?? 0,
     expires_at: lobby.expires_at,
     current_user_is_member: activeMemberships.has(lobby.id),
@@ -723,23 +784,77 @@ export async function cancelMatchmakingLobby(lobbyId: string) {
 export async function leaveMatchmakingLobby(lobbyId: string) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   throwIfError(authError);
-
   const currentUserId = authData.user?.id;
-  if (!currentUserId) {
-    throw new Error('You must be signed in to leave a lobby.');
-  }
+  if (!currentUserId) throw new Error('Not authenticated');
 
-  const { error } = await supabase
+  // Mark user as left
+  const { error: leaveError } = await supabase
     .from('matchmaking_lobby_members')
-    .update({
-      status: 'left',
-      left_at: new Date().toISOString(),
-    })
+    .update({ status: 'left', left_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('lobby_id', lobbyId)
     .eq('student_id', currentUserId)
     .eq('status', 'active');
+  throwIfError(leaveError);
 
-  throwIfError(error);
+  // Refund payment if student had paid — ensures admin reports subtract correctly
+  await supabase
+    .from('matchmaking_lobby_payments')
+    .update({ status: 'refunded', updated_at: new Date().toISOString() })
+    .eq('lobby_id', lobbyId)
+    .eq('student_id', currentUserId)
+    .eq('status', 'paid');
+
+  // Get lobby info (creator + slot) before any deletes
+  const { data: lobby } = await supabase
+    .from('matchmaking_lobbies')
+    .select('creator_id, availability_slot_id')
+    .eq('id', lobbyId)
+    .maybeSingle();
+  const isCreator = lobby?.creator_id === currentUserId;
+  const slotId = lobby?.availability_slot_id;
+
+  // Count remaining active members (excluding the user who just left)
+  const { count: remainingCount } = await supabase
+    .from('matchmaking_lobby_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('lobby_id', lobbyId)
+    .eq('status', 'active');
+
+  if (!remainingCount || remainingCount === 0) {
+    // No members left → release slot, mark lobby as expired.
+    // We handle everything in frontend to preserve payment records for
+    // admin refund reporting (cancel_matchmaking_lobby RPC would delete them).
+    if (slotId) {
+      await supabase
+        .from('tutor_availability_slots')
+        .update({ status: 'available', updated_at: new Date().toISOString() })
+        .eq('id', slotId);
+    }
+
+    // Mark lobby as expired so it disappears from admin Bookings panel
+    // and student lobby lists. Members already marked 'left', payments
+    // already marked 'refunded' above.
+    await supabase
+      .from('matchmaking_lobbies')
+      .update({ status: 'expired', updated_at: new Date().toISOString() })
+      .eq('id', lobbyId);
+  } else if (isCreator) {
+    // Creator left → transfer to oldest active member
+    const { data: nextCreator } = await supabase
+      .from('matchmaking_lobby_members')
+      .select('student_id')
+      .eq('lobby_id', lobbyId)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (nextCreator) {
+      await supabase
+        .from('matchmaking_lobbies')
+        .update({ creator_id: nextCreator.student_id, updated_at: new Date().toISOString() })
+        .eq('id', lobbyId);
+    }
+  }
 }
 
 export async function kickMatchmakingLobbyMember(lobbyId: string, studentId: string) {
@@ -752,11 +867,64 @@ export async function kickMatchmakingLobbyMember(lobbyId: string, studentId: str
 }
 
 export async function payLobbyShare(lobbyId: string) {
-  const { error } = await supabase.rpc('pay_lobby_share', {
-    p_lobby_id: lobbyId,
-  });
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  throwIfError(authError);
+  const currentUserId = authData.user?.id;
+  if (!currentUserId) throw new Error('Not authenticated');
 
-  throwIfError(error);
+  // Get the lobby to check status and price
+  const { data: lobby, error: lobbyError } = await supabase
+    .from('matchmaking_lobbies')
+    .select('price_total, status')
+    .eq('id', lobbyId)
+    .maybeSingle();
+  throwIfError(lobbyError);
+  if (!lobby) throw new Error('Lobby tidak ditemukan.');
+  if (lobby.status !== 'pending_payment' && lobby.status !== 'open') {
+    throw new Error('Pembayaran tidak dapat dilakukan pada status lobby saat ini (' + lobby.status + ').');
+  }
+
+  // Upsert payment record as paid (fixed price = price_total)
+  const { error: paymentError } = await supabase
+    .from('matchmaking_lobby_payments')
+    .upsert(
+      {
+        lobby_id: lobbyId,
+        student_id: currentUserId,
+        amount: lobby.price_total,
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'lobby_id,student_id' },
+    );
+  throwIfError(paymentError);
+
+  // Get all active member IDs
+  const { data: activeMembers, error: membersError } = await supabase
+    .from('matchmaking_lobby_members')
+    .select('student_id')
+    .eq('lobby_id', lobbyId)
+    .eq('status', 'active');
+  throwIfError(membersError);
+
+  // Get all paid member IDs
+  const { data: paidMembers, error: paidMembersError } = await supabase
+    .from('matchmaking_lobby_payments')
+    .select('student_id')
+    .eq('lobby_id', lobbyId)
+    .eq('status', 'paid');
+  throwIfError(paidMembersError);
+
+  const paidIds = new Set((paidMembers ?? []).map((p: { student_id: string }) => p.student_id));
+  const allPaid = (activeMembers ?? []).every((m: { student_id: string }) => paidIds.has(m.student_id));
+
+  if (allPaid && (activeMembers ?? []).length > 0) {
+    await supabase
+      .from('matchmaking_lobbies')
+      .update({ status: 'paid', updated_at: new Date().toISOString() })
+      .eq('id', lobbyId);
+  }
 }
 
 export async function forceLobbyToPendingPayment(lobbyId: string) {
@@ -765,6 +933,32 @@ export async function forceLobbyToPendingPayment(lobbyId: string) {
   });
 
   throwIfError(error);
+}
+
+export async function forceLobbyToPendingPaymentV2(lobbyId: string) {
+  const { error } = await supabase.rpc('force_lobby_to_pending_payment', {
+    p_lobby_id: lobbyId,
+  });
+  throwIfError(error);
+}
+
+export async function payLobbyShareFixed(lobbyId: string) {
+  const { error } = await supabase.rpc('pay_lobby_share_fixed', {
+    p_lobby_id: lobbyId,
+  });
+  throwIfError(error);
+}
+
+export async function expireUnpaidAndCleanup() {
+  // Use the improved cleanup function that also releases orphaned held slots
+  const { error } = await supabase.rpc('cleanup_expired_lobbies_and_slots');
+  if (error) {
+    // Fallback to old function if new one doesn't exist yet
+    const { error: fallbackError } = await supabase.rpc('expire_unpaid_and_cleanup_lobbies');
+    if (fallbackError) {
+      console.warn('Cleanup failed:', error.message);
+    }
+  }
 }
 
 export async function fetchMyPaymentStatus(lobbyId: string): Promise<'pending' | 'paid' | 'failed' | 'expired' | null> {

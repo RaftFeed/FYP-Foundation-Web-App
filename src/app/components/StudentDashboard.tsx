@@ -369,7 +369,7 @@ export function StudentDashboard() {
             </div>
           </header>
 
-          {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} />}
+          {activeView === 'courses' && <CoursesView isLoading={isLoading} query={query} subjects={subjects} setQuery={setQuery} availableTutorSlots={availableTutorSlots} />}
           {activeView === 'lobbies' && (
             <MatchmakingLobbyView
               onLobbyChange={() => void loadDashboard()}
@@ -416,7 +416,7 @@ export function StudentDashboard() {
             />
           )}
           {activeView === 'dashboard' && (
-            <DashboardView joinedLobbies={joinedLobbies} displayName={displayName} availableTutorSlots={availableTutorSlots} setActiveView={setActiveView} />
+            <DashboardView joinedLobbies={joinedLobbies} displayName={displayName} availableTutorSlots={availableTutorSlots} setActiveView={setActiveView} onLeaveLobby={(lobbyId) => void handleLeaveLobby(lobbyId)} />
           )}
         </main>
       </div>
