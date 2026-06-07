@@ -679,6 +679,9 @@ export async function fetchMatchmakingLobbies() {
 
   const memberCounts = new Map<string, number>();
   for (const membership of memberships ?? []) {
+    // Only count members who have the 'student' role (exclude tutors/admins)
+    const studentRole = (membership.student as any)?.role;
+    if (studentRole && studentRole !== 'student') continue;
     memberCounts.set(membership.lobby_id, (memberCounts.get(membership.lobby_id) ?? 0) + 1);
   }
 

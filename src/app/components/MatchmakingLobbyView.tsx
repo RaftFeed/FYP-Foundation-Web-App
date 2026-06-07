@@ -130,7 +130,10 @@ export function MatchmakingLobbyView({
     () =>
       lobbies.filter((lobby) => {
         const memberCount = lobby.member_count ?? 0;
-        return lobby.visibility === 'public' && lobby.status === 'open' && !lobby.current_user_is_member && memberCount < lobby.max_participants;
+        return lobby.visibility === 'public'
+          && (lobby.status === 'open' || lobby.status === 'pending_payment')
+          && !lobby.current_user_is_member
+          && memberCount < lobby.max_participants;
       }),
     [lobbies],
   );
@@ -426,7 +429,7 @@ export function MatchmakingLobbyView({
 
       const updatedLobbies = await fetchMatchmakingLobbies();
       const joinedLobby = updatedLobbies.find(
-        (l) => l.code === code.toUpperCase() && l.current_user_is_member
+        (l) => l.code === code.toUpperCase() && l.status !== 'expired' && l.status !== 'cancelled'
       );
 
       if (joinedLobby) {
@@ -441,7 +444,8 @@ export function MatchmakingLobbyView({
       showNotice('success', 'Bergabung! Segera selesaikan pembayaran dalam 1 jam.');
       onLobbyChange?.();
     } catch (error) {
-      showNotice('error', error instanceof Error ? error.message : 'Gagal bergabung ke lobby.');
+      const msg = error instanceof Error ? error.message : 'Gagal bergabung ke lobby.';
+      showNotice('error', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -449,7 +453,8 @@ export function MatchmakingLobbyView({
 
   const handleJoinByCode = async (event: FormEvent) => {
     event.preventDefault();
-    if (!joinCode.trim()) {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) {
       showNotice('error', 'Masukkan kode lobby terlebih dahulu.');
       return;
     }
@@ -457,11 +462,11 @@ export function MatchmakingLobbyView({
     setIsSubmitting(true);
     setNotice(null);
     try {
-      await joinMatchmakingLobby(joinCode.trim());
+      await joinMatchmakingLobby(code);
 
       const updatedLobbies = await fetchMatchmakingLobbies();
       const joinedLobby = updatedLobbies.find(
-        (l) => l.code === joinCode.trim().toUpperCase() && l.current_user_is_member
+        (l) => l.code === code && l.status !== 'expired' && l.status !== 'cancelled'
       );
 
       if (joinedLobby) {
@@ -478,7 +483,8 @@ export function MatchmakingLobbyView({
       setJoinCode('');
       setActiveModal(null);
     } catch (error) {
-      showNotice('error', error instanceof Error ? error.message : 'Gagal bergabung ke lobby.');
+      const msg = error instanceof Error ? error.message : 'Gagal bergabung ke lobby.';
+      showNotice('error', msg);
     } finally {
       setIsSubmitting(false);
     }

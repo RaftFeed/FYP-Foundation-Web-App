@@ -139,10 +139,6 @@ export function TutorDashboard() {
   const monthlyRevenue = tutorPayments
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amount, 0);
-  const refundedAmount = tutorPayments
-    .filter((p) => p.status === 'refunded')
-    .reduce((sum, p) => sum + p.amount, 0);
-
   const loadTutorData = async () => {
     if (!user) {
       return;
@@ -565,11 +561,10 @@ export function TutorDashboard() {
                 isLoading={isLoading}
                 monthlyRevenue={monthlyRevenue}
                 netRevenue={monthlyRevenue * 0.8}
-                refundedAmount={refundedAmount}
+                totalSlots={slots.length}
                 availableSlots={availableSlots.length}
                 bookedSlots={bookedSlots.length}
                 heldSlots={heldSlots.length}
-                totalSlots={currentSlots.length}
                 tutorPayments={tutorPayments}
                 setActiveView={setActiveView}
                 slots={slots}
@@ -775,11 +770,10 @@ function DashboardView({
   isLoading,
   monthlyRevenue,
   netRevenue,
-  refundedAmount,
+  totalSlots,
   availableSlots,
   bookedSlots,
   heldSlots,
-  totalSlots,
   tutorPayments,
   setActiveView,
   slots,
@@ -789,11 +783,10 @@ function DashboardView({
   isLoading: boolean;
   monthlyRevenue: number;
   netRevenue: number;
-  refundedAmount: number;
+  totalSlots: number;
   availableSlots: number;
   bookedSlots: number;
   heldSlots: number;
-  totalSlots: number;
   tutorPayments: TutorPayment[];
   setActiveView: (view: TutorView) => void;
   slots: TutorAvailabilitySlot[];
@@ -842,7 +835,7 @@ function DashboardView({
   const stats = [
     { label: 'Pendapatan Kotor', value: formatCurrency(monthlyRevenue), view: 'slots' as TutorView, wide: true },
     { label: 'Pendapatan Bersih', value: formatCurrency(netRevenue), view: 'slots' as TutorView, wide: true },
-    { label: 'Dana Dikembalikan', value: formatCurrency(refundedAmount), view: 'slots' as TutorView, wide: true },
+    { label: 'Total Slot', value: String(totalSlots), view: 'slots' as TutorView },
     { label: 'Total Kelas', value: String(tutorPayments.filter((p) => p.status === 'paid').length), view: 'slots' as TutorView },
   ];
 

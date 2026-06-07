@@ -283,6 +283,28 @@ END;
 $$;
 
 -- ===========================================================
+-- 6. Cleanup cancelled slots that have passed their start time
+--    Removes cancelled slots from DB to keep the schedule clean
+-- ===========================================================
+CREATE OR REPLACE FUNCTION public.cleanup_cancelled_slots()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Delete cancelled slots whose start time has already passed
+  -- Only delete slots that are not referenced by any lobby
+  DELETE FROM public.tutor_availability_slots s
+  WHERE s.status = 'cancelled'
+    AND s.starts_at < NOW()
+    AND NOT EXISTS (
+      SELECT 1 FROM public.matchmaking_lobbies l
+      WHERE l.availability_slot_id = s.id
+    );
+END;
+$$;
+
+-- ===========================================================
 -- Grant execute permissions to authenticated users
 -- ===========================================================
 GRANT EXECUTE ON FUNCTION public.cleanup_expired_lobbies_and_slots() TO authenticated;
@@ -290,3 +312,4 @@ GRANT EXECUTE ON FUNCTION public.leave_lobby(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.cleanup_old_reports() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.calculate_tutor_net_income(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_payment_report() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cleanup_cancelled_slots() TO authenticated;

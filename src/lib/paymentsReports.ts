@@ -61,6 +61,7 @@ export async function fetchPaidPayments(): Promise<PaidPayment[]> {
       )
     `)
     .eq('status', 'paid')
+    .not('lobby.status', 'in', '("expired","cancelled")')
     .order('paid_at', { ascending: false, nullsLast: true });
   if (error) throw new Error(error.message);
 
@@ -78,6 +79,7 @@ export interface TutorPayment {
 }
 
 export async function fetchTutorPayments(tutorUserId: string): Promise<TutorPayment[]> {
+  // Fetch via slot → tutor_profile → tutor_user_id to avoid dependency on matchmaking_lobbies.tutor_user_id
   const { data, error } = await supabase
     .from('matchmaking_lobby_payments')
     .select(`
@@ -87,22 +89,30 @@ export async function fetchTutorPayments(tutorUserId: string): Promise<TutorPaym
       status,
       paid_at,
       created_at,
-      lobby:matchmaking_lobbies ( title )
+      lobby:matchmaking_lobbies (
+        title,
+        availability_slot_id,
+        slot:tutor_availability_slots (
+          tutor_profile_id,
+          tutor:tutor_profiles ( user_id )
+        )
+      )
     `)
-    .eq('lobby.tutor_user_id', tutorUserId)
     .in('status', ['paid', 'refunded'])
     .order('paid_at', { ascending: false, nullsLast: true });
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    lobby_id: row.lobby_id,
-    lobby_title: row.lobby?.title ?? '-',
-    amount: row.amount,
-    status: row.status,
-    paid_at: row.paid_at,
-    created_at: row.created_at,
-  }));
+  return (data ?? [])
+    .filter((row: any) => row.lobby?.slot?.tutor?.user_id === tutorUserId)
+    .map((row: any) => ({
+      id: row.id,
+      lobby_id: row.lobby_id,
+      lobby_title: row.lobby?.title ?? '-',
+      amount: row.amount,
+      status: row.status,
+      paid_at: row.paid_at,
+      created_at: row.created_at,
+    }));
 }
 
 export async function fetchAllPaymentsWithTutorInfo(): Promise<PaidPayment[]> {
