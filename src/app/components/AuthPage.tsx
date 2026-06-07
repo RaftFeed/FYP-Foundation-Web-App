@@ -35,6 +35,7 @@ export function AuthPage() {
 
   function setAuthMode(nextMode: AuthMode) {
     setMode(nextMode);
+    setConfirmPassword('');
     const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     window.history.replaceState({}, '', `${base}/login${nextMode === 'signup' ? '?mode=signup' : ''}`);
   }
@@ -42,7 +43,7 @@ export function AuthPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (password !== confirmPassword) {
+    if (mode === 'signup' && password !== confirmPassword) {
       setMessage('Password dan konfirmasi password harus sama.');
       return;
     }
@@ -174,28 +175,30 @@ export function AuthPage() {
                 </button>
               </label>
 
-              <label className="relative block">
-                <span className="sr-only">Konfirmasi Password</span>
-                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type={isPasswordVisible ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="h-11 w-full rounded-lg border border-border pl-11 pr-11 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  placeholder="Konfirmasi password"
-                  minLength={6}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsPasswordVisible((visible) => !visible)}
-                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  aria-label={isPasswordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
-                  aria-pressed={isPasswordVisible}
-                >
-                  {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </label>
+              {mode === 'signup' && (
+                <label className="relative block">
+                  <span className="sr-only">Konfirmasi Password</span>
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type={isPasswordVisible ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="h-11 w-full rounded-lg border border-border pl-11 pr-11 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    placeholder="Konfirmasi password"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordVisible((visible) => !visible)}
+                    className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    aria-label={isPasswordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
+                    aria-pressed={isPasswordVisible}
+                  >
+                    {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </label>
+              )}
 
               {(authError || message) && (
                 <div className={`rounded-lg px-4 py-3 text-sm ${authError ? 'bg-red-50 text-red-700' : 'bg-secondary text-primary'}`}>
