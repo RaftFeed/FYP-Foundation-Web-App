@@ -1446,12 +1446,12 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
   const totalClasses = paidPayments.length;
   const totalRevenue = paidPayments.reduce((sum, p) => sum + p.amount, 0);
   const avgRevenue = totalClasses > 0 ? Math.round(totalRevenue / totalClasses) : 0;
-  const platformFee = Math.round(totalRevenue * 0.2);
-  const tutorNetIncome = Math.round(totalRevenue * 0.8);
   const refundedTotal = allPayments
     .filter((p) => p.status === 'refunded')
     .reduce((sum, p) => sum + p.amount, 0);
-  const netRevenue = totalRevenue - refundedTotal;
+  const netGrossRevenue = totalRevenue - refundedTotal;
+  const platformFee = Math.round(netGrossRevenue * 0.2);
+  const tutorNetIncome = Math.round(netGrossRevenue * 0.8);
 
   const barChartData = useMemo(() => ({
     labels: aggregated.map((a) => a.label),
@@ -1570,30 +1570,30 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total Kelas</p>
-          <p className="mt-2 text-3xl font-extrabold text-foreground">{totalClasses}</p>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="min-w-0 rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total Kelas</p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-foreground sm:text-3xl">{totalClasses}</p>
         </div>
-        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pendapatan Kotor</p>
-          <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(totalRevenue)}</p>
+        <div className="min-w-0 rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pendapatan Kotor</p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-foreground sm:text-3xl">{formatCurrency(totalRevenue)}</p>
         </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Fee Platform (20%)</p>
-          <p className="mt-2 text-3xl font-extrabold text-amber-700">{formatCurrency(platformFee)}</p>
+        <div className="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Fee Platform (20%)</p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-amber-700 sm:text-3xl">{formatCurrency(platformFee)}</p>
         </div>
-        <div className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Pendapatan Tutor (80%)</p>
-          <p className="mt-2 text-3xl font-extrabold text-green-700">{formatCurrency(tutorNetIncome)}</p>
+        <div className="min-w-0 rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Pendapatan Tutor (80%)</p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-green-700 sm:text-3xl">{formatCurrency(tutorNetIncome)}</p>
         </div>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-700">Dana Dikembalikan</p>
-          <p className="mt-2 text-3xl font-extrabold text-red-700">{formatCurrency(refundedTotal)}</p>
+        <div className="min-w-0 rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-red-700">Dana Dikembalikan</p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-red-700 sm:text-3xl">{formatCurrency(refundedTotal)}</p>
         </div>
-        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pendapatan Bersih</p>
-          <p className="mt-2 text-3xl font-extrabold text-foreground">{formatCurrency(netRevenue)}</p>
+        <div className="min-w-0 rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pendapatan Bersih Sistem</p>
+          <p className="mt-2 truncate text-2xl font-extrabold text-foreground sm:text-3xl">{formatCurrency(platformFee)}</p>
         </div>
       </div>
 
