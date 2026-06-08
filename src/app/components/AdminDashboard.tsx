@@ -1412,6 +1412,8 @@ function getPeriodSortKey(date: Date, period: ReportPeriod) {
 
 function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: PaidPayment[]; reports: Report[]; allPayments: PaidPayment[] }) {
   const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [detailPage, setDetailPage] = useState(1);
+  const DETAIL_PAGE_SIZE = 15;
 
   const aggregated = useMemo(() => {
     const groups = new Map<string, { label: string; sortKey: string; count: number; revenue: number }>();
@@ -1442,6 +1444,40 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
       .sort((a, b) => b[1] - a[1])
       .map(([name, value]) => ({ name, value }));
   }, [paidPayments]);
+
+  // Tutor-level revenue breakdown using allPayments which has tutor info
+  const tutorBreakdown = useMemo(() => {
+    const groups = new Map<string, { name: string; count: number; revenue: number }>();
+    for (const payment of allPayments) {
+      if (payment.status !== 'paid') continue;
+      const tutorName = (payment as any).lobby?.tutor?.full_name ?? 'Tidak Diketahui';
+      const existing = groups.get(tutorName);
+      if (existing) {
+        existing.count += 1;
+        existing.revenue += payment.amount;
+      } else {
+        groups.set(tutorName, { name: tutorName, count: 1, revenue: payment.amount });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [allPayments]);
+
+  // Detailed payment list (sorted newest first)
+  const detailPayments = useMemo(() => {
+    return [...allPayments]
+      .filter((p) => p.status === 'paid')
+      .sort((a, b) => {
+        const dateA = a.paid_at ?? a.created_at;
+        const dateB = b.paid_at ?? b.created_at;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
+  }, [allPayments]);
+
+  const detailTotalPages = Math.ceil(detailPayments.length / DETAIL_PAGE_SIZE);
+  const paginatedDetails = useMemo(() => {
+    const start = (detailPage - 1) * DETAIL_PAGE_SIZE;
+    return detailPayments.slice(start, start + DETAIL_PAGE_SIZE);
+  }, [detailPayments, detailPage]);
 
   const totalClasses = paidPayments.length;
   const totalRevenue = paidPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -1628,6 +1664,106 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
           <div className="mx-auto h-72 max-w-md">
             <Doughnut data={doughnutChartData} options={doughnutOptions} />
           </div>
+        )}
+      </div>
+
+      {tutorBreakdown.length > 0 && (
+        <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-bold text-foreground">Pendapatan per Tutor</h3>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px] text-left text-sm">
+                <thead className="bg-muted text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Tutor</th>
+                    <th className="px-4 py-3 font-semibold text-center">Jumlah Kelas</th>
+                    <th className="px-4 py-3 font-semibold text-right">Pendapatan Kotor</th>
+                    <th className="px-4 py-3 font-semibold text-right">Pendapatan Tutor (80%)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {tutorBreakdown.map((tutor) => (
+                    <tr key={tutor.name}>
+                      <td className="px-4 py-3 font-semibold text-foreground">{tutor.name}</td>
+                      <td className="px-4 py-3 text-center text-muted-foreground">{tutor.count}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(tutor.revenue)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(Math.round(tutor.revenue * 0.8))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-primary/10 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h3 className="text-sm font-bold text-foreground">Detail Pembayaran Kelas</h3>
+          <p className="text-xs font-medium text-muted-foreground">{detailPayments.length} transaksi</p>
+        </div>
+        {detailPayments.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Belum ada data pembayaran.</p>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-lg border border-border">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Tanggal</th>
+                      <th className="px-4 py-3 font-semibold">Lobby</th>
+                      <th className="px-4 py-3 font-semibold">Mata Kuliah</th>
+                      <th className="px-4 py-3 font-semibold text-right">Jumlah</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {paginatedDetails.map((payment) => (
+                      <tr key={payment.id}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                          {payment.paid_at ? formatDate(payment.paid_at) : formatDate(payment.created_at)}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-foreground">{payment.lobby?.title ?? '-'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{payment.lobby?.subject_name ?? '-'}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">{formatCurrency(payment.amount)}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-block rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+                            Lunas
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {detailTotalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Halaman {detailPage} dari {detailTotalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDetailPage((p) => Math.max(1, p - 1))}
+                    disabled={detailPage === 1}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-xs font-semibold text-primary hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    <ChevronLeft className="h-3 w-3" /> Sebelumnya
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailPage((p) => Math.min(detailTotalPages, p + 1))}
+                    disabled={detailPage === detailTotalPages}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-xs font-semibold text-primary hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    Selanjutnya <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

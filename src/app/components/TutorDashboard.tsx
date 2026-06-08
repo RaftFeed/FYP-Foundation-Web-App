@@ -1046,6 +1046,21 @@ function ProfileView({
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-semibold text-foreground">Harga Default per Kelas</label>
+              <p className="mt-0.5 mb-2 text-xs text-muted-foreground">Harga ini akan otomatis terisi saat membuat slot jadwal baru.</p>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">Rp</span>
+                <input
+                  type="number"
+                  value={profileForm.hourlyRate}
+                  onChange={(e) => setProfileForm({ ...profileForm, hourlyRate: Number(e.target.value) })}
+                  min={0}
+                  step={1000}
+                  className="mt-0 h-11 w-full rounded-lg border border-primary/20 bg-white pl-10 pr-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
+                />
+              </div>
+            </div>
 
             <div>
               <label className="block text-sm font-semibold text-foreground">Bio singkat</label>
@@ -1077,6 +1092,27 @@ function ProfileView({
               <div>
                 <p className="text-xs text-white/70">Email</p>
                 <p className="mt-0.5 text-sm font-medium text-white">{userEmail || '-'}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-white/70">Mata Kuliah</p>
+                <p className="mt-0.5 text-sm font-medium text-white">
+                  {subjects.find((s) => s.id === (profileForm.subjectId || profile?.subject_id))?.name ?? '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-white/70">Harga per Kelas</p>
+                <p className="mt-0.5 text-sm font-medium text-white">
+                  {profileForm.hourlyRate ? `Rp ${profileForm.hourlyRate.toLocaleString('id-ID')}` : '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-white/70">Status</p>
+                <p className={`mt-0.5 text-sm font-medium ${approved ? 'text-accent' : 'text-amber-300'}`}>
+                  {approved ? '✓ Disetujui Admin' : '⏳ Menunggu Approval'}
+                </p>
               </div>
 
               <div>
