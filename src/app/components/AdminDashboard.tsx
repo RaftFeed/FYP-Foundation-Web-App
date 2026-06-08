@@ -3,8 +3,8 @@ import logoUrl from '../../img/FYP_no_bg.png';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
-import { ProfileView } from './ui/student-dashboard/ProfileView';
-import { SettingsView } from './ui/student-dashboard/SettingsView';
+import { ProfileView } from './ui/ProfileView';
+import { SettingsView } from './ui/SettingsView';
 import {
   Profile,
   Subject,
@@ -24,7 +24,7 @@ import {
   upsertTutorProfile,
 } from '../../lib/dashboardData';
 import { supabase } from '../../lib/supabase';
-import { TutorAvailabilitySlot, MatchmakingLobby, fetchAdminTutorAvailability, fetchLobbyStudents, fetchMatchmakingLobbies, SlotStudent } from '../../lib/matchmakingData';
+import { TutorAvailabilitySlot, MatchmakingLobby, fetchAdminTutorAvailability, fetchLobbyStudents, fetchMatchmakingLobbies, SlotStudent, deleteTutorAvailability } from '../../lib/matchmakingData';
 import { Report, fetchReports, PaidPayment, fetchPaidPayments, fetchAllPaymentsWithTutorInfo } from '../../lib/paymentsReports';
 import { readLocalCache, usePersistentState, writeLocalCache } from '../../lib/browserState';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
@@ -49,12 +49,12 @@ const navigation: Array<{ label: string; icon: typeof Home; view: AdminTab }> = 
   { label: 'Dashboard', icon: Home, view: 'dashboard' },
   { label: 'Tutor Slots', icon: CalendarDays, view: 'sessions' },
   { label: 'Tutors', icon: GraduationCap, view: 'tutors' },
-  { label: 'Subjects', icon: BookOpen, view: 'subjects' },
+  { label: 'Mata Kuliah', icon: BookOpen, view: 'subjects' },
   { label: 'Bookings', icon: SquarePen, view: 'bookings' },
   { label: 'Users', icon: Users, view: 'users' },
-  { label: 'Reports', icon: FileBarChart, view: 'reports' },
-  { label: 'Profile', icon: UserRound, view: 'profile' },
-  { label: 'Settings', icon: Settings, view: 'settings' },
+  { label: 'Laporan', icon: FileBarChart, view: 'reports' },
+  { label: 'Profil', icon: UserRound, view: 'profile' },
+  { label: 'Pengaturan', icon: Settings, view: 'settings' },
 ];
 
 const emptySubject = { name: '', code: '', description: '' };
@@ -431,7 +431,7 @@ export function AdminDashboard() {
             </section>
           )}
 
-          {activeTab === 'sessions' && <AvailabilityPanel slots={slots} />}
+          {activeTab === 'sessions' && <AvailabilityPanel slots={slots} onRefresh={loadAdminData} />}
 
           {activeTab === 'tutors' && (
             <TutorsPanel
@@ -781,7 +781,7 @@ const slotStatusLabels: Record<string, string> = {
   cancelled: 'Dibatalkan',
 };
 
-function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
+function AvailabilityPanel({ slots, onRefresh }: { slots: TutorAvailabilitySlot[]; onRefresh: () => Promise<void> }) {
   const [viewMode, setViewMode] = useState<AvailabilityViewMode>('table');
   const [sortKey, setSortKey] = useState<AvailabilitySortKey>('starts_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -790,6 +790,23 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTutor, setSelectedTutor] = useState('all');
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<TutorAvailabilitySlot | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [notice, setNotice] = useState<NoticeModalState | null>(null);
+
+  const handleDeleteSlot = async (slot: TutorAvailabilitySlot) => {
+    setConfirmDeleteSlot(null);
+    setIsDeleting(true);
+    try {
+      await deleteTutorAvailability(slot.id);
+      setNotice({ tone: 'success', message: 'Slot jadwal berhasil dihapus.' });
+      await onRefresh();
+    } catch (err) {
+      setNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Gagal menghapus slot.' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const subjectOptions = useMemo(
     () => ['all', ...Array.from(new Set(slots.map((s) => s.subject_name))).sort((a, b) => a.localeCompare(b, 'id-ID'))],
@@ -932,6 +949,7 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
                     </button>
                   </th>
                   <th className="px-4 py-3 font-semibold">Catatan</th>
+                  <th className="px-4 py-3 font-semibold text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -955,6 +973,18 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
                       </span>
                     </Cell>
                     <Cell>{slot.notes ?? '-'}</Cell>
+                    <Cell className="text-right">
+                      {(slot.status === 'available' || slot.status === 'cancelled' || new Date(slot.ends_at).getTime() < Date.now()) && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteSlot(slot)}
+                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-red-600 hover:bg-red-50 transition"
+                          title="Hapus Slot"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </Cell>
                   </tr>
                 ))}
               </tbody>
@@ -1065,6 +1095,18 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
                       <p className="text-sm font-semibold text-foreground">{session.subject_name} — {session.tutor_name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{session.location} · Maks {session.max_participants} siswa</p>
                       {session.notes && <p className="mt-2 rounded-lg bg-secondary p-2 text-xs text-muted-foreground">{session.notes}</p>}
+                      {(session.status === 'available' || session.status === 'cancelled' || new Date(session.ends_at).getTime() < Date.now()) && (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteSlot(session)}
+                            className="flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100 transition"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Hapus Slot
+                          </button>
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -1079,6 +1121,39 @@ function AvailabilityPanel({ slots }: { slots: TutorAvailabilitySlot[] }) {
           )}
         </div>
       )}
+      {confirmDeleteSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
+            <h2 className="mb-2 text-lg font-extrabold text-foreground">Hapus Slot Permanen?</h2>
+            <p className="mb-5 text-sm font-medium text-muted-foreground">
+              Slot <span className="font-semibold text-foreground">{confirmDeleteSlot.subject_name}</span> oleh{' '}
+              <span className="font-semibold text-foreground">{confirmDeleteSlot.tutor_name}</span> pada{' '}
+              <span className="font-semibold text-foreground">{formatDate(confirmDeleteSlot.starts_at)}</span>{' '}
+              ({formatTimeRange(confirmDeleteSlot.starts_at, confirmDeleteSlot.ends_at)}) akan dihapus secara permanen.
+              Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteSlot(null)}
+                className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition"
+              >
+                Kembali
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteSlot(confirmDeleteSlot)}
+                disabled={isDeleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notice && <NoticeModal notice={notice} onClose={() => setNotice(null)} />}
     </section>
   );
 }

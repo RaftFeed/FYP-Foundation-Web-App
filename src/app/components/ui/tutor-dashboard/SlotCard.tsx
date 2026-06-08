@@ -84,6 +84,7 @@ export function SlotCard({
   onViewStudents,
   onViewLobby,
   onCancel,
+  onDelete,
   onCreateLobby,
   showCancel = true,
 }: {
@@ -91,12 +92,14 @@ export function SlotCard({
   onViewStudents?: (slot: TutorAvailabilitySlot) => void;
   onViewLobby?: (slotId: string) => void | Promise<void>;
   onCancel?: (slot: TutorAvailabilitySlot) => void;
+  onDelete?: (slot: TutorAvailabilitySlot) => void;
   onCreateLobby?: (slotId: string) => void;
   showCancel?: boolean;
 }) {
   const effectiveStatus = getEffectiveStatus(slot);
   const isExpired = effectiveStatus === 'expired';
   const canCancel = showCancel && slot.status === 'available' && !isExpired;
+  const canDelete = onDelete && (slot.status === 'available' || slot.status === 'cancelled' || isExpired);
 
   return (
     <article className={`rounded-xl border bg-white p-5 shadow-md ${isExpired ? 'border-red-200 opacity-75' : 'border-primary/10'}`}>
@@ -172,6 +175,16 @@ export function SlotCard({
           >
             <Trash2 className="h-4 w-4" />
             Batalkan Slot
+          </button>
+        )}
+        {onDelete && canDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(slot)}
+            className="flex h-10 items-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 transition"
+          >
+            <Trash2 className="h-4 w-4" />
+            Hapus Slot
           </button>
         )}
       </div>

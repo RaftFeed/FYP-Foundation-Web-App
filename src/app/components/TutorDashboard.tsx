@@ -22,10 +22,13 @@ import { fetchTutorPayments, type TutorPayment } from '../../lib/paymentsReports
 import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
 import { SlotCard, StudentListModal } from './ui/tutor-dashboard/SlotCard';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
+import { ProfileView } from './ui/ProfileView';
+import { SettingsView } from './ui/SettingsView';
 import {
   TutorAvailabilitySlot,
   TutorSelfProfile,
   cancelTutorAvailability,
+  deleteTutorAvailability,
   createTutorAvailability,
   fetchMyTutorAvailability,
   fetchMyTutorProfile,
@@ -108,9 +111,6 @@ export function TutorDashboard() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
   const [notice, setNotice] = useState<NoticeModalState | null>(null);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tutorPayments, setTutorPayments] = useState<TutorPayment[]>([]);
 
@@ -376,49 +376,21 @@ export function TutorDashboard() {
     }
   };
 
-  const isEmailUser = user?.app_metadata?.providers?.includes('email') ?? false;
-
-  const handleUpdatePassword = async (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!user?.email) {
-      showNotice('error', 'Gagal memverifikasi akun Anda.');
-      return;
-    }
-
-    if (!currentPassword) {
-      showNotice('error', 'Silakan masukkan password saat ini.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      showNotice('error', 'Password baru minimal 6 karakter.');
-      return;
-    }
-
-    setIsUpdatingPassword(true);
+  const handleDeleteSlot = async (slotId: string) => {
+    setIsSaving(true);
+    setNotice(null);
     try {
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      });
-
-      if (verifyError) {
-        throw new Error('Password saat ini salah.');
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-      if (updateError) throw updateError;
-
-      showNotice('success', 'Password berhasil diperbarui.');
-      setCurrentPassword('');
-      setNewPassword('');
+      await deleteTutorAvailability(slotId);
+      showNotice('success', 'Slot jadwal berhasil dihapus.');
+      await loadSlots();
     } catch (error) {
-      showNotice('error', getErrorMessage(error, 'Gagal memperbarui password.'));
+      showNotice('error', error instanceof Error ? error.message : 'Gagal menghapus slot jadwal.');
     } finally {
-      setIsUpdatingPassword(false);
+      setIsSaving(false);
     }
   };
+
+
 
 
 
@@ -574,12 +546,13 @@ export function TutorDashboard() {
 
             {activeView === 'profile' && (
               <ProfileView
+                isTutor={true}
                 approved={approved}
                 isSaving={isSaving}
                 profile={profile}
                 profileForm={profileForm}
                 subjects={subjects}
-                onSubmit={handleProfileSubmit}
+                onProfileSave={handleProfileSubmit}
                 onAvatarSelect={handleAvatarUpload}
                 setProfileForm={setProfileForm}
                 isUploadingAvatar={isUploadingAvatar}
@@ -600,77 +573,14 @@ export function TutorDashboard() {
                 slots={slots}
                 subjects={subjects}
                 onCancelSlot={handleCancelSlot}
+                onDeleteSlot={handleDeleteSlot}
                 setSlotForm={setSlotForm}
               />
             )}
 
             {activeView === 'schedule' && <TutorScheduleView slots={slots} />}
 
-            {activeView === 'settings' && (
-              <section className="space-y-6">
-                <div className="rounded-xl border border-primary/10 bg-white p-6 shadow-md">
-                  <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Ganti Password</h1>
-                  {!isEmailUser ? (
-                    <div className="rounded-lg border border-primary/10 bg-secondary/50 p-4 text-sm">
-                      <p className="mb-1 font-semibold text-primary">Akun Pihak Ketiga</p>
-                      <p className="text-muted-foreground">
-                        Akun kamu terhubung menggunakan penyedia layanan pihak ketiga (seperti Google). Kata sandi kamu diatur melalui layanan tersebut.
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="mb-5 text-sm font-medium text-muted-foreground">
-                        Perbarui kata sandi akun kamu di sini. Pastikan kata sandi aman.
-                      </p>
-                      <form onSubmit={handleUpdatePassword} className="max-w-md grid gap-4">
-                        <label className="block">
-                          <span className="text-sm font-semibold text-foreground">Password Saat Ini</span>
-                          <input
-                            type="password"
-                            value={currentPassword}
-                            onChange={(event) => setCurrentPassword(event.target.value)}
-                            placeholder="Masukkan password saat ini"
-                            className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="text-sm font-semibold text-foreground">Password Baru</span>
-                          <input
-                            type="password"
-                            value={newPassword}
-                            onChange={(event) => setNewPassword(event.target.value)}
-                            placeholder="Masukkan password baru"
-                            className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
-                          />
-                        </label>
-                        <button
-                          type="submit"
-                          disabled={isUpdatingPassword || !newPassword || !currentPassword}
-                          className="h-11 rounded-lg bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-                        >
-                          {isUpdatingPassword ? 'Menyimpan...' : 'Simpan Password'}
-                        </button>
-                      </form>
-                    </>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-md">
-                  <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-red-900 lg:text-3xl">Sesi Akun</h1>
-                  <p className="mb-5 text-sm font-medium text-red-700/80">
-                    Keluar dari akun kamu pada perangkat ini. Kamu harus login kembali untuk mengakses dashboard.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void signOut()}
-                    className="flex h-11 w-fit items-center gap-2 rounded-lg bg-red-600 px-6 text-sm font-semibold text-white transition hover:bg-red-700"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Logout
-                  </button>
-                </div>
-              </section>
-            )}
+            {activeView === 'settings' && <SettingsView showNotice={showNotice} />}
           </div>
         </main>
       </div>
@@ -906,10 +816,6 @@ function DashboardView({
 
           <div className="space-y-3 text-sm font-medium text-foreground">
             <div className="rounded-lg bg-secondary/60 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Approval</p>
-              <p className="mt-1 font-semibold">{approved ? 'Profil disetujui admin' : 'Menunggu approval admin'}</p>
-            </div>
-            <div className="rounded-lg bg-secondary/60 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Slot tersedia</p>
               <p className="mt-1 font-semibold">{availableSlots} slot aktif</p>
             </div>
@@ -928,209 +834,13 @@ function DashboardView({
   );
 }
 
-function ProfileView({
-  approved,
-  isSaving,
-  profile,
-  profileForm,
-  subjects,
-  onSubmit,
-  setProfileForm,
-  avatarUrl,
-  onAvatarSelect,
-  isUploadingAvatar,
-  userEmail,
-}: {
-  approved: boolean;
-  isSaving: boolean;
-  profile: TutorSelfProfile | null;
-  profileForm: typeof emptyProfileForm;
-  subjects: Subject[];
-  onSubmit: (event: FormEvent) => void;
-  onAvatarSelect: (file: File) => void;
-  setProfileForm: React.Dispatch<React.SetStateAction<typeof emptyProfileForm>>;
-  isUploadingAvatar?: boolean;
-  avatarUrl?: string | null;
-  userEmail?: string | null;
-}) {
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const displayUrl = avatarFile ? URL.createObjectURL(avatarFile) : avatarUrl;
 
-  const joinedDate = profile?.created_at
-    ? new Date(profile.created_at).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-    : '-';
-
-  return (
-    <section className="w-full">
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left Column - Informasi Profil */}
-        <div className="rounded-xl border border-primary/10 bg-white p-6 shadow-md">
-          <h2 className="mb-6 text-xl font-bold text-foreground">Informasi Profil</h2>
-
-          <div className="mb-6 flex flex-col items-center gap-4 sm:flex-row">
-            <div
-              className="group relative h-20 w-20 cursor-pointer overflow-hidden rounded-full border-2 border-primary/20 bg-secondary"
-              onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
-            >
-              {displayUrl ? (
-                <img src={displayUrl} alt="Avatar" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-secondary text-primary">
-                  <UserRound className="h-10 w-10" />
-                </div>
-              )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                <span className="text-[10px] font-bold text-white uppercase text-center leading-tight">
-                  {isUploadingAvatar ? 'Mengunggah...' : 'Ubah Foto'}
-                </span>
-              </div>
-            </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*"
-              disabled={isUploadingAvatar}
-              onChange={(e) => {
-                if (e.target.files?.[0]) {
-                  const file = e.target.files[0];
-                  setAvatarFile(file);
-                  void onAvatarSelect(file);
-                }
-              }}
-            />
-            <div>
-              <p className="text-sm font-semibold text-foreground">Foto Profil</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Rekomendasi ukuran 1:1, maksimal 2MB.
-              </p>
-            </div>
-          </div>
-
-          <form
-            onSubmit={onSubmit}
-            className="space-y-5"
-          >
-            <div>
-              <label className="block text-sm font-semibold text-foreground">Nama lengkap</label>
-              <input
-                type="text"
-                value={profileForm.fullName}
-                onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
-                placeholder="Masukkan Nama Profil yang Baru"
-                className="mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-foreground">Mata Kuliah yang Diajar</label>
-              <select
-                value={profileForm.subjectId}
-                onChange={(e) => setProfileForm({ ...profileForm, subjectId: e.target.value })}
-                className={`mt-2 h-11 w-full rounded-lg border border-primary/20 bg-white px-4 text-sm font-medium outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 ${profileForm.subjectId ? 'text-foreground' : 'text-foreground/30'}`}
-              >
-                <option value="" disabled>
-                  Pilih mata kuliah
-                </option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-foreground">Harga Default per Kelas</label>
-              <p className="mt-0.5 mb-2 text-xs text-muted-foreground">Harga ini akan otomatis terisi saat membuat slot jadwal baru.</p>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">Rp</span>
-                <input
-                  type="number"
-                  value={profileForm.hourlyRate}
-                  onChange={(e) => setProfileForm({ ...profileForm, hourlyRate: Number(e.target.value) })}
-                  min={0}
-                  step={1000}
-                  className="mt-0 h-11 w-full rounded-lg border border-primary/20 bg-white pl-10 pr-4 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-foreground/30"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-foreground">Bio singkat</label>
-              <textarea
-                value={profileForm.bio}
-                onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
-                rows={4}
-                placeholder="Ceritakan singkat tentang dirimu..."
-                className="mt-2 w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm font-medium text-foreground outline-none transition placeholder:text-foreground/30 focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSaving || !profileForm.fullName.trim()}
-              className="h-11 w-full rounded-lg bg-black text-sm font-semibold text-white transition hover:bg-black/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-            >
-              {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
-            </button>
-          </form>
-        </div>
-
-        {/* Right Column - Akun */}
-        <div className="space-y-6">
-          <div className="rounded-xl bg-primary p-6 shadow-md">
-            <h2 className="mb-6 text-xl font-bold text-accent">Informasi Akun</h2>
-
-            <div className="space-y-5">
-              <div>
-                <p className="text-xs text-white/70">Email</p>
-                <p className="mt-0.5 text-sm font-medium text-white">{userEmail || '-'}</p>
-              </div>
-
-              <div>
-                <p className="text-xs text-white/70">Mata Kuliah</p>
-                <p className="mt-0.5 text-sm font-medium text-white">
-                  {subjects.find((s) => s.id === (profileForm.subjectId || profile?.subject_id))?.name ?? '-'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-white/70">Harga per Kelas</p>
-                <p className="mt-0.5 text-sm font-medium text-white">
-                  {profileForm.hourlyRate ? `Rp ${profileForm.hourlyRate.toLocaleString('id-ID')}` : '-'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-white/70">Status</p>
-                <p className={`mt-0.5 text-sm font-medium ${approved ? 'text-accent' : 'text-amber-300'}`}>
-                  {approved ? '✓ Disetujui Admin' : '⏳ Menunggu Approval'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-white/70">Bergabung Sejak</p>
-                <p className="mt-0.5 text-sm font-medium text-white">{joinedDate}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function SlotManagementView({
   isLoading,
   isSaving,
   onCancelSlot,
+  onDeleteSlot,
   onSubmit,
   selectedMonth,
   setSelectedMonth,
@@ -1143,6 +853,7 @@ function SlotManagementView({
   isLoading: boolean;
   isSaving: boolean;
   onCancelSlot: (slotId: string) => void;
+  onDeleteSlot: (slotId: string) => void;
   onSubmit: (event: FormEvent) => void;
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -1153,6 +864,7 @@ function SlotManagementView({
   setSlotForm: React.Dispatch<React.SetStateAction<typeof emptySlotForm>>;
 }) {
   const [confirmCancelSlot, setConfirmCancelSlot] = useState<TutorAvailabilitySlot | null>(null);
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<TutorAvailabilitySlot | null>(null);
   const [studentModalSlot, setStudentModalSlot] = useState<TutorAvailabilitySlot | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
@@ -1171,6 +883,17 @@ function SlotManagementView({
     setConfirmCancelSlot(null);
     await onCancelSlot(slotId);
   }, [confirmCancelSlot, onCancelSlot]);
+
+  const handleOpenDelete = useCallback((slot: TutorAvailabilitySlot) => {
+    setConfirmDeleteSlot(slot);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!confirmDeleteSlot) return;
+    const slotId = confirmDeleteSlot.id;
+    setConfirmDeleteSlot(null);
+    await onDeleteSlot(slotId);
+  }, [confirmDeleteSlot, onDeleteSlot]);
 
   const handleOpenForm = () => {
     setIsFormModalOpen(true);
@@ -1229,6 +952,7 @@ function SlotManagementView({
             slot={slot}
             onViewStudents={setStudentModalSlot}
             onCancel={handleOpenCancel}
+            onDelete={handleOpenDelete}
             showCancel={slot.status === 'available'}
           />
         ))}
@@ -1283,24 +1007,6 @@ function SlotManagementView({
                     className="w-full rounded-lg border border-primary/20 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                 </label>
-                <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                  <TutorSelect
-                    label="Pola jadwal"
-                    value={slotRepeatMode}
-                    onChange={(value) => setSlotForm({ ...slotForm, repeatMode: value === 'weekly' ? 'weekly' : 'once' })}
-                  >
-                    <option value="once">Sekali saja</option>
-                    <option value="weekly">Ulang mingguan</option>
-                  </TutorSelect>
-                  {slotRepeatMode === 'weekly' && (
-                    <TutorTextInput
-                      label="Jumlah minggu"
-                      type="number"
-                      value={String(slotForm.repeatWeeks ?? 4)}
-                      onChange={(value) => setSlotForm({ ...slotForm, repeatWeeks: Number(value) })}
-                    />
-                  )}
-                </div>
                 <div className="flex gap-3 justify-end">
                   <button type="button" onClick={handleCloseForm} className="h-10 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary hover:bg-secondary transition">
                     Batal
@@ -1345,6 +1051,37 @@ function SlotManagementView({
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition disabled:cursor-not-allowed disabled:bg-red-300"
               >
                 Ya, Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDeleteSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-primary/10 bg-white p-5 shadow-xl">
+            <h2 className="mb-2 text-lg font-extrabold text-foreground">Hapus Slot Permanen?</h2>
+            <p className="mb-5 text-sm font-medium text-muted-foreground">
+              Slot <span className="font-semibold text-foreground">{confirmDeleteSlot.subject_name}</span> pada{' '}
+              <span className="font-semibold text-foreground">{formatDate(confirmDeleteSlot.starts_at)}</span>{' '}
+              ({formatTimeRange(confirmDeleteSlot.starts_at, confirmDeleteSlot.ends_at)}) akan dihapus secara permanen.
+              Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteSlot(null)}
+                className="rounded-lg border border-primary/20 px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary transition"
+              >
+                Kembali
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDelete()}
+                disabled={isSaving}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                Ya, Hapus
               </button>
             </div>
           </div>

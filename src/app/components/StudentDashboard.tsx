@@ -9,8 +9,8 @@ import { DashboardView } from './ui/student-dashboard/DashboardView';
 import { CoursesView } from './ui/student-dashboard/CoursesView';
 import { BookingsView } from './ui/student-dashboard/BookingsView';
 import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
-import { ProfileView } from './ui/student-dashboard/ProfileView';
-import { SettingsView } from './ui/student-dashboard/SettingsView';
+import { ProfileView } from './ui/ProfileView';
+import { SettingsView } from './ui/SettingsView';
 import {
   fetchProfileById,
   fetchSubjectMatchmakingSummaries,

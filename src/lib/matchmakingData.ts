@@ -1070,6 +1070,15 @@ export async function cancelTutorAvailability(slotId: string) {
   }
 }
 
+export async function deleteTutorAvailability(slotId: string) {
+  const { error } = await supabase
+    .from('tutor_availability_slots')
+    .delete()
+    .eq('id', slotId);
+
+  throwIfError(error);
+}
+
 function mapTutorAvailabilityRows(rows: any[]): TutorAvailabilitySlot[] {
   return rows.map((row) => {
     const subject = Array.isArray(row.subject) ? row.subject[0] : row.subject;
