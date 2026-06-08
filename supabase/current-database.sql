@@ -150,3 +150,32 @@ CREATE TABLE public.study_materials (
   CONSTRAINT study_materials_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.profiles(id),
   CONSTRAINT study_materials_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id)
 );
+
+-- ============================================================================
+-- Row Level Security (RLS) Policies Context
+-- ============================================================================
+
+-- profiles
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow authenticated users to read profiles" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow users to update their own profile" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- matchmaking_lobbies
+ALTER TABLE public.matchmaking_lobbies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow authenticated users to view public lobbies or lobbies they belong to" ON public.matchmaking_lobbies FOR SELECT TO authenticated USING (visibility = 'public' OR creator_id = auth.uid() OR EXISTS (SELECT 1 FROM public.matchmaking_lobby_members WHERE lobby_id = id AND student_id = auth.uid()));
+CREATE POLICY "Allow authenticated users to create lobbies" ON public.matchmaking_lobbies FOR INSERT TO authenticated WITH CHECK (creator_id = auth.uid());
+CREATE POLICY "Allow creators to update their own lobbies" ON public.matchmaking_lobbies FOR UPDATE TO authenticated USING (creator_id = auth.uid()) WITH CHECK (creator_id = auth.uid());
+CREATE POLICY "Allow creators to delete their own lobbies" ON public.matchmaking_lobbies FOR DELETE TO authenticated USING (creator_id = auth.uid());
+
+-- matchmaking_lobby_members
+ALTER TABLE public.matchmaking_lobby_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow authenticated users to view active lobby memberships" ON public.matchmaking_lobby_members FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow students to join lobbies" ON public.matchmaking_lobby_members FOR INSERT TO authenticated WITH CHECK (student_id = auth.uid());
+CREATE POLICY "Allow students to update their own membership" ON public.matchmaking_lobby_members FOR UPDATE TO authenticated USING (student_id = auth.uid()) WITH CHECK (student_id = auth.uid());
+CREATE POLICY "Allow students to leave lobbies" ON public.matchmaking_lobby_members FOR DELETE TO authenticated USING (student_id = auth.uid());
+
+-- matchmaking_lobby_payments
+ALTER TABLE public.matchmaking_lobby_payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow students to view their own payments" ON public.matchmaking_lobby_payments FOR SELECT TO authenticated USING (student_id = auth.uid());
+CREATE POLICY "Allow students to insert their own payments" ON public.matchmaking_lobby_payments FOR INSERT TO authenticated WITH CHECK (student_id = auth.uid());
+CREATE POLICY "Allow students to update their own payments" ON public.matchmaking_lobby_payments FOR UPDATE TO authenticated USING (student_id = auth.uid()) WITH CHECK (student_id = auth.uid());

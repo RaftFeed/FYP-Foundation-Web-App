@@ -386,6 +386,103 @@ export async function deleteTutorProfile(id: string) {
   throwIfError(error);
 }
 
+export async function deleteUserAccount(id: string) {
+  const { data: tutorProfiles, error: tutorProfilesError } = await supabase
+    .from('tutor_profiles')
+    .select('id')
+    .eq('user_id', id);
+  throwIfError(tutorProfilesError);
+
+  const tutorProfileIds = (tutorProfiles ?? []).map((profile) => profile.id);
+
+  let slotIds: string[] = [];
+  if (tutorProfileIds.length > 0) {
+    const { data: tutorSlots, error: tutorSlotsError } = await supabase
+      .from('tutor_availability_slots')
+      .select('id')
+      .in('tutor_profile_id', tutorProfileIds);
+    throwIfError(tutorSlotsError);
+    slotIds = (tutorSlots ?? []).map((slot) => slot.id);
+  }
+
+  const lobbyIds = new Set<string>();
+
+  const collectLobbyIds = async (query: ReturnType<typeof supabase.from>) => {
+    const { data, error } = await query.select('id');
+    throwIfError(error);
+    for (const row of data ?? []) {
+      if (row?.id) {
+        lobbyIds.add(row.id);
+      }
+    }
+  };
+
+  await collectLobbyIds(supabase.from('matchmaking_lobbies').eq('creator_id', id));
+  await collectLobbyIds(supabase.from('matchmaking_lobbies').eq('tutor_user_id', id));
+
+  if (slotIds.length > 0) {
+    await collectLobbyIds(supabase.from('matchmaking_lobbies').in('availability_slot_id', slotIds));
+  }
+
+  if (lobbyIds.size > 0) {
+    const lobbyIdList = Array.from(lobbyIds);
+    const { error: lobbyPaymentsError } = await supabase
+      .from('matchmaking_lobby_payments')
+      .delete()
+      .in('lobby_id', lobbyIdList);
+    throwIfError(lobbyPaymentsError);
+
+    const { error: lobbyMembersError } = await supabase
+      .from('matchmaking_lobby_members')
+      .delete()
+      .in('lobby_id', lobbyIdList);
+    throwIfError(lobbyMembersError);
+
+    const { error: lobbiesError } = await supabase
+      .from('matchmaking_lobbies')
+      .delete()
+      .in('id', lobbyIdList);
+    throwIfError(lobbiesError);
+  }
+
+  const { error: studentPaymentsError } = await supabase
+    .from('matchmaking_lobby_payments')
+    .delete()
+    .eq('student_id', id);
+  throwIfError(studentPaymentsError);
+
+  const { error: studentLobbyMembershipError } = await supabase
+    .from('matchmaking_lobby_members')
+    .delete()
+    .eq('student_id', id);
+  throwIfError(studentLobbyMembershipError);
+
+  const { error: bookingsError } = await supabase.from('bookings').delete().eq('student_id', id);
+  throwIfError(bookingsError);
+
+  const { error: reportsError } = await supabase.from('reports').delete().eq('admin_id', id);
+  throwIfError(reportsError);
+
+  if (slotIds.length > 0) {
+    const { error: slotsError } = await supabase
+      .from('tutor_availability_slots')
+      .delete()
+      .in('id', slotIds);
+    throwIfError(slotsError);
+  }
+
+  if (tutorProfileIds.length > 0) {
+    const { error: tutorDeleteError } = await supabase
+      .from('tutor_profiles')
+      .delete()
+      .in('id', tutorProfileIds);
+    throwIfError(tutorDeleteError);
+  }
+
+  const { error: profileError } = await supabase.from('profiles').delete().eq('id', id);
+  throwIfError(profileError);
+}
+
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
   throwIfError(error);

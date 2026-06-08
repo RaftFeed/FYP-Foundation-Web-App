@@ -22,7 +22,7 @@ import { fetchTutorPayments, type TutorPayment } from '../../lib/paymentsReports
 import { TutorScheduleView } from './ui/student-dashboard/TutorScheduleView';
 import { SlotCard, StudentListModal } from './ui/tutor-dashboard/SlotCard';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
-import { ProfileView } from './ui/ProfileView';
+import { ProfileView } from './ui/student-dashboard/ProfileView';
 import { SettingsView } from './ui/SettingsView';
 import {
   TutorAvailabilitySlot,

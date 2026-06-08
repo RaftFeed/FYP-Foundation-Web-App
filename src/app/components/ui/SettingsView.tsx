@@ -3,7 +3,23 @@ import { LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { NoticeModalState } from './NoticeModal';
 
-export function SettingsView({ showNotice }: { showNotice: (tone: NoticeModalState['tone'], message: string) => void }) {
+export interface SettingsViewProps {
+  showNotice: (tone: NoticeModalState['tone'], message: string) => void;
+  passwordTitle?: string;
+  passwordDescription?: string;
+  sessionTitle?: string;
+  sessionDescription?: string;
+  logoutLabel?: string;
+}
+
+export function SettingsView({
+  showNotice,
+  passwordTitle = 'Ganti Password',
+  passwordDescription = 'Perbarui kata sandi akun kamu di sini. Pastikan kata sandi aman.',
+  sessionTitle = 'Sesi Akun',
+  sessionDescription = 'Keluar dari akun kamu pada perangkat ini. Kamu harus login kembali untuk mengakses dashboard.',
+  logoutLabel = 'Logout',
+}: SettingsViewProps) {
   const { user, signOut } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -57,7 +73,7 @@ export function SettingsView({ showNotice }: { showNotice: (tone: NoticeModalSta
     <section>
       <div className="grid gap-6">
         <div className="rounded-xl border border-primary/10 bg-white p-6 shadow-md">
-          <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">Ganti Password</h1>
+          <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-foreground lg:text-3xl">{passwordTitle}</h1>
           {!isEmailUser ? (
             <div className="rounded-lg border border-primary/10 bg-secondary/50 p-4 text-sm">
               <p className="font-semibold text-primary mb-1">Akun Pihak Ketiga</p>
@@ -65,9 +81,7 @@ export function SettingsView({ showNotice }: { showNotice: (tone: NoticeModalSta
             </div>
           ) : (
             <>
-              <p className="mb-5 text-sm font-medium text-muted-foreground">
-                Perbarui kata sandi akun kamu di sini. Pastikan kata sandi aman.
-              </p>
+              <p className="mb-5 text-sm font-medium text-muted-foreground">{passwordDescription}</p>
               <form onSubmit={handleUpdatePassword} className="max-w-md grid gap-4">
                 <label className="block">
                   <span className="text-sm font-semibold text-foreground">Password Saat Ini</span>
@@ -102,17 +116,15 @@ export function SettingsView({ showNotice }: { showNotice: (tone: NoticeModalSta
         </div>
 
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-md">
-          <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-red-900 lg:text-3xl">Sesi Akun</h1>
-          <p className="mb-5 text-sm font-medium text-red-700/80">
-            Keluar dari akun kamu pada perangkat ini. Kamu harus login kembali untuk mengakses dashboard.
-          </p>
+          <h1 className="mb-2 text-2xl font-extrabold tracking-normal text-red-900 lg:text-3xl">{sessionTitle}</h1>
+          <p className="mb-5 text-sm font-medium text-red-700/80">{sessionDescription}</p>
           <button
             type="button"
             onClick={() => void signOut()}
             className="flex h-11 w-fit items-center gap-2 rounded-lg bg-red-600 px-6 text-sm font-semibold text-white transition hover:bg-red-700"
           >
             <LogOut className="h-4 w-4" />
-            Logout
+            {logoutLabel}
           </button>
         </div>
       </div>

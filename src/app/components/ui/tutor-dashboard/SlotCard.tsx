@@ -177,7 +177,7 @@ export function SlotCard({
             Batalkan Slot
           </button>
         )}
-        {onDelete && canDelete && (
+        {onDelete && canDelete && !canCancel && (
           <button
             type="button"
             onClick={() => onDelete(slot)}

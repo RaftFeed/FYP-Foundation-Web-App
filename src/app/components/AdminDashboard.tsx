@@ -3,7 +3,7 @@ import logoUrl from '../../img/FYP_no_bg.png';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { NoticeModal, type NoticeModalState } from './ui/NoticeModal';
-import { ProfileView } from './ui/ProfileView';
+import { ProfileView } from './ui/student-dashboard/ProfileView';
 import { SettingsView } from './ui/SettingsView';
 import {
   Profile,
@@ -12,6 +12,7 @@ import {
   UserRole,
   deleteSubject,
   deleteTutorProfile,
+  deleteUserAccount,
   fetchProfiles,
   fetchSubjects,
   fetchTutorProfiles,
@@ -31,6 +32,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
+  ChartOptions,
   LinearScale,
   PointElement,
   LineElement,
@@ -38,6 +40,7 @@ import {
   ArcElement,
   Title,
   Tooltip,
+  TooltipItem,
   Legend,
 } from 'chart.js';
 
@@ -98,6 +101,7 @@ export function AdminDashboard() {
   const [isSavingName, setIsSavingName] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -291,6 +295,25 @@ export function AdminDashboard() {
       showNotice('error', error instanceof Error ? error.message : 'Gagal memperbarui profil.');
     } finally {
       setIsSavingName(false);
+    }
+  };
+
+  const handleDeleteUser = async (profile: Profile) => {
+    if (profile.id === user?.id) {
+      showNotice('error', 'Akun admin yang sedang dipakai tidak dapat dihapus.');
+      return;
+    }
+
+    setDeletingUserId(profile.id);
+    setNotice(null);
+    try {
+      await deleteUserAccount(profile.id);
+      showNotice('success', `User ${profile.email ?? profile.full_name ?? profile.id} berhasil dihapus.`);
+      await loadAdminData();
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal menghapus user.');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -494,7 +517,10 @@ export function AdminDashboard() {
 
           {activeTab === 'users' && (
             <UsersPanel
+              currentUserId={user?.id}
+              deletingUserId={deletingUserId}
               profiles={profiles}
+              onDeleteUser={handleDeleteUser}
               onRoleChange={(id, role) => runAdminAction(() => updateProfileRole(id, role), 'User role updated.')}
             />
           )}
@@ -1370,9 +1396,22 @@ function LobbyBookingsPanel({ lobbies }: { lobbies: MatchmakingLobby[] }) {
 
 type UserSortKey = 'email' | 'full_name' | 'role';
 
-function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleChange: (id: string, role: UserRole) => void }) {
+function UsersPanel({
+  profiles,
+  onRoleChange,
+  onDeleteUser,
+  currentUserId,
+  deletingUserId,
+}: {
+  profiles: Profile[];
+  onRoleChange: (id: string, role: UserRole) => void;
+  onDeleteUser: (profile: Profile) => void | Promise<void>;
+  currentUserId?: string;
+  deletingUserId?: string | null;
+}) {
   const [sortKey, setSortKey] = useState<UserSortKey>('email');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<Profile | null>(null);
 
   const sortedProfiles = useMemo(() => {
     const compare = (left: Profile, right: Profile) => {
@@ -1429,6 +1468,7 @@ function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleCha
                     Role {sortIndicator('role')}
                   </button>
                 </th>
+                <th className="px-4 py-3 text-right font-semibold">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -1447,12 +1487,75 @@ function UsersPanel({ profiles, onRoleChange }: { profiles: Profile[]; onRoleCha
                       <option value="admin">Admin</option>
                     </select>
                   </td>
+                  <td className="px-4 py-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteProfile(profile)}
+                      disabled={profile.id === currentUserId || deletingUserId === profile.id}
+                      className="inline-flex items-center justify-center rounded-lg p-2 text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                      title={profile.id === currentUserId ? 'Akun aktif tidak dapat dihapus' : 'Hapus user'}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {confirmDeleteProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/25 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-primary/10 bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-extrabold text-foreground">Hapus User?</h2>
+                <p className="mt-1 text-sm font-medium text-muted-foreground">
+                  Tindakan ini akan menghapus data user dari dashboard admin dan mencoba membersihkan data terkait yang dimiliki user tersebut.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteProfile(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/15 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                aria-label="Tutup"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-semibold text-red-900">{confirmDeleteProfile.full_name || 'Tanpa Nama'}</p>
+              <p className="mt-1 text-sm text-red-800">{confirmDeleteProfile.email || confirmDeleteProfile.id}</p>
+              <p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-red-700">{confirmDeleteProfile.role}</p>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteProfile(null)}
+                className="h-10 rounded-lg border border-primary/20 px-4 text-sm font-semibold text-primary transition hover:bg-secondary"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const profile = confirmDeleteProfile;
+                  setConfirmDeleteProfile(null);
+                  await onDeleteUser(profile);
+                }}
+                disabled={deletingUserId === confirmDeleteProfile.id}
+                className="flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletingUserId === confirmDeleteProfile.id ? 'Menghapus...' : 'Ya, Hapus User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1618,19 +1721,49 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
     ],
   }), [subjectBreakdown]);
 
-  const chartOptions = {
+  const getCartesianTooltipLabel = (ctx: TooltipItem<'bar'> | TooltipItem<'line'>) => {
+    const numericValue = typeof ctx.parsed.y === 'number' ? ctx.parsed.y : 0;
+    if (ctx.dataset.label === 'Pendapatan' || ctx.dataset.label === 'Pendapatan per Mata Kuliah') {
+      return `${ctx.dataset.label}: ${formatCurrency(numericValue)}`;
+    }
+    return `${ctx.dataset.label}: ${numericValue}`;
+  };
+
+  const barChartOptions: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx: { parsed: { y: number }; dataset: { label: string } }) => {
-            if (ctx.dataset.label === 'Pendapatan' || ctx.dataset.label === 'Pendapatan per Mata Kuliah') {
-              return `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}`;
-            }
-            return `${ctx.dataset.label}: ${ctx.parsed.y}`;
+          label: (ctx: TooltipItem<'bar'>) => getCartesianTooltipLabel(ctx),
+        },
+      },
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: (value: string | number) => {
+            const num = typeof value === 'string' ? Number(value) : value;
+            if (num >= 1000000) return `${(num / 1000000).toFixed(1)}jt`;
+            if (num >= 1000) return `${(num / 1000).toFixed(0)}rb`;
+            return num;
           },
+        },
+      },
+    },
+  };
+
+  const lineChartOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: TooltipItem<'line'>) => getCartesianTooltipLabel(ctx),
         },
       },
     },
@@ -1715,7 +1848,7 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
             <p className="py-10 text-center text-sm text-muted-foreground">Belum ada data pembayaran.</p>
           ) : (
             <div className="h-64">
-              <Bar data={barChartData} options={chartOptions} />
+              <Bar data={barChartData} options={barChartOptions} />
             </div>
           )}
         </div>
@@ -1725,7 +1858,7 @@ function ReportsPanel({ paidPayments, reports, allPayments }: { paidPayments: Pa
             <p className="py-10 text-center text-sm text-muted-foreground">Belum ada data pembayaran.</p>
           ) : (
             <div className="h-64">
-              <Line data={lineChartData} options={chartOptions} />
+              <Line data={lineChartData} options={lineChartOptions} />
             </div>
           )}
         </div>
@@ -1903,8 +2036,20 @@ function DataTable({ children, headers }: { children: React.ReactNode; headers: 
   );
 }
 
-function Cell({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
-  return <td className={`px-4 py-4 ${strong ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{children || '-'}</td>;
+function Cell({
+  children,
+  strong,
+  className = '',
+}: {
+  children: React.ReactNode;
+  strong?: boolean;
+  className?: string;
+}) {
+  return (
+    <td className={`px-4 py-4 ${strong ? 'font-semibold text-foreground' : 'text-muted-foreground'} ${className}`}>
+      {children || '-'}
+    </td>
+  );
 }
 
 function ActionCell({ onDelete, onEdit }: { onDelete: () => void; onEdit: () => void }) {

@@ -62,7 +62,7 @@ export async function fetchPaidPayments(): Promise<PaidPayment[]> {
     `)
     .eq('status', 'paid')
     .not('lobby.status', 'in', '("expired","cancelled")')
-    .order('paid_at', { ascending: false, nullsLast: true });
+    .order('paid_at', { ascending: false });
   if (error) throw new Error(error.message);
 
   return (data ?? []).map(mapPaymentRow);
@@ -99,7 +99,7 @@ export async function fetchTutorPayments(tutorUserId: string): Promise<TutorPaym
       )
     `)
     .in('status', ['paid', 'refunded'])
-    .order('paid_at', { ascending: false, nullsLast: true });
+    .order('paid_at', { ascending: false });
   if (error) throw new Error(error.message);
 
   return (data ?? [])
@@ -139,7 +139,7 @@ export async function fetchAllPaymentsWithTutorInfo(): Promise<PaidPayment[]> {
       )
     `)
     .in('status', ['paid', 'refunded'])
-    .order('paid_at', { ascending: false, nullsLast: true });
+    .order('paid_at', { ascending: false });
   if (error) throw new Error(error.message);
 
   return (data ?? []).map(mapPaymentRow);
