@@ -813,7 +813,6 @@ export async function leaveMatchmakingLobby(lobbyId: string) {
     .select('creator_id, availability_slot_id')
     .eq('id', lobbyId)
     .maybeSingle();
-  const isCreator = lobby?.creator_id === currentUserId;
   const slotId = lobby?.availability_slot_id;
 
   // Count remaining active members (excluding the user who just left)
@@ -841,23 +840,10 @@ export async function leaveMatchmakingLobby(lobbyId: string) {
       .from('matchmaking_lobbies')
       .update({ status: 'expired', updated_at: new Date().toISOString() })
       .eq('id', lobbyId);
-  } else if (isCreator) {
-    // Creator left → transfer to oldest active member
-    const { data: nextCreator } = await supabase
-      .from('matchmaking_lobby_members')
-      .select('student_id')
-      .eq('lobby_id', lobbyId)
-      .eq('status', 'active')
-      .order('joined_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (nextCreator) {
-      await supabase
-        .from('matchmaking_lobbies')
-        .update({ creator_id: nextCreator.student_id, updated_at: new Date().toISOString() })
-        .eq('id', lobbyId);
-    }
   }
+  // Note: When the creator leaves and other members remain, the database
+  // trigger trg_matchmaking_lobby_member_leave automatically transfers
+  // creator_id to the oldest active member. No client-side update needed.
 }
 
 export async function kickMatchmakingLobbyMember(lobbyId: string, studentId: string) {

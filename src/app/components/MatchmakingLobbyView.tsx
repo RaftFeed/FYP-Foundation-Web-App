@@ -204,16 +204,21 @@ export function MatchmakingLobbyView({
     return filteredLobbies.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredLobbies, currentPage]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (useCache = true) => {
     if (!user) {
       return;
     }
 
     const cacheKey = `matchmaking:${user.id}:data`;
-    const cachedData = readLocalCache<{
-      slots: TutorAvailabilitySlot[];
-      lobbies: MatchmakingLobby[];
-    }>(cacheKey);
+
+    // Use a short 30-second cache for lobbies so the UI feels fresh
+    // after leaving/joining, but avoids a full loading spinner on every navigation.
+    const cachedData = useCache
+      ? readLocalCache<{
+          slots: TutorAvailabilitySlot[];
+          lobbies: MatchmakingLobby[];
+        }>(cacheKey, 30 * 1000)
+      : null;
 
     if (cachedData) {
       setSlots(cachedData.slots);
@@ -246,8 +251,19 @@ export function MatchmakingLobbyView({
     void loadData();
   }, [loadData]);
 
+  // Re-fetch without cache when the tab becomes visible again (user navigated back)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        void loadData(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadData]);
+
   // Subscribe to realtime changes — auto-refresh when lobbies or members change
-  useLobbyRealtime(loadData);
+  useLobbyRealtime(() => loadData(false));
 
   useEffect(() => {
     if (initialSlotId && slots.length > 0) {
@@ -281,7 +297,7 @@ export function MatchmakingLobbyView({
     try {
       await action();
       showNotice('success', successMessage);
-      await loadData();
+      await loadData(false);
       onLobbyChange?.();
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : 'Aksi lobby gagal diproses.');
@@ -497,7 +513,7 @@ export function MatchmakingLobbyView({
       await payLobbyShare(lobby.id);
       setPaymentLobby(null);
       showNotice('success', 'Pembayaran berhasil! Kelas aktif.');
-      await loadData();
+      await loadData(false);
       onLobbyChange?.();
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : 'Gagal memproses pembayaran.');
@@ -903,7 +919,7 @@ function LobbyCard({
 }) {
   const activeMembers = lobby.member_count ?? 0;
   const isLocked = new Date(lobby.starts_at).getTime() - Date.now() < 24 * 60 * 60 * 1000;
-  const canJoin = (lobby.status === 'open' || lobby.status === 'paid') && !lobby.current_user_is_member && activeMembers < lobby.max_participants && !isLocked;
+  const canJoin = (lobby.status === 'open' || lobby.status === 'pending_payment' || lobby.status === 'paid') && !lobby.current_user_is_member && activeMembers < lobby.max_participants && !isLocked;
   const memberCountLabel = `${activeMembers}/${lobby.max_participants} siswa`;
   const progressLabel = `${activeMembers}/${lobby.max_participants}`;
 
