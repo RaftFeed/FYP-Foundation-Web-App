@@ -48,10 +48,7 @@ export function TutorScheduleView({
   onCreateLobby?: (slotId: string) => void;
 }) {
   const today = useMemo(() => new Date(), []);
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const seedDate = slots[0]?.starts_at ? new Date(slots[0].starts_at) : today;
-    return new Date(seedDate.getFullYear(), seedDate.getMonth(), 1);
-  });
+  const [currentMonth, setCurrentMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTutor, setSelectedTutor] = useState('all');
 

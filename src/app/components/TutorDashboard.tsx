@@ -32,6 +32,7 @@ import {
 } from '../../lib/matchmakingData';
 import { updateProfileDetails } from '../../lib/dashboardData';
 import { supabase } from '../../lib/supabase';
+import { formatLocalDateInputValue } from '../../lib/dateUtils';
 
 const emptyProfileForm = {
   fullName: '',
@@ -43,7 +44,7 @@ const emptyProfileForm = {
 
 const emptySlotForm = {
   subjectId: '',
-  date: new Date().toISOString().slice(0, 10),
+  date: formatLocalDateInputValue(),
   startTime: '19:00',
   endTime: '20:30',
   priceTotal: 120000,
@@ -101,7 +102,7 @@ export function TutorDashboard() {
   const [slots, setSlots] = useState<TutorAvailabilitySlot[]>([]);
   const [profileForm, setProfileForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:profile-form` : null, emptyProfileForm);
   const [slotForm, setSlotForm] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:slot-form` : null, emptySlotForm);
-  const [selectedMonth, setSelectedMonth] = usePersistentState(stateKeyPrefix ? `${stateKeyPrefix}:selected-month` : null, monthValue(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState(monthValue(new Date()));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
