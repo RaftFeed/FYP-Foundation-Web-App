@@ -62,9 +62,8 @@ function LobbyCountdown({ expiresAt }: { expiresAt: string }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums ${
-        isUrgent ? 'text-red-600 animate-pulse' : 'text-amber-600'
-      }`}
+      className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums ${isUrgent ? 'text-red-600 animate-pulse' : 'text-amber-600'
+        }`}
     >
       <Timer className="h-3.5 w-3.5" />
       {label}
@@ -130,10 +129,12 @@ export function MatchmakingLobbyView({
     () =>
       lobbies.filter((lobby) => {
         const memberCount = lobby.member_count ?? 0;
+        const isLocked = new Date(lobby.starts_at).getTime() - Date.now() < 24 * 60 * 60 * 1000;
         return lobby.visibility === 'public'
-          && (lobby.status === 'open' || lobby.status === 'pending_payment')
+          && (lobby.status === 'open' || lobby.status === 'pending_payment' || lobby.status === 'paid')
           && !lobby.current_user_is_member
-          && memberCount < lobby.max_participants;
+          && memberCount < lobby.max_participants
+          && !isLocked;
       }),
     [lobbies],
   );
@@ -755,7 +756,7 @@ export function MatchmakingLobbyView({
             <div className="mb-4 rounded-lg border border-primary/10 bg-secondary p-3 text-sm font-medium text-foreground">
               <p className="font-semibold text-primary">{formatCurrency(selectedSlot.price_total)} / siswa</p>
               <p className="mt-1 text-muted-foreground">
-                Harga tetap per siswa, tidak bergantung jumlah peserta.
+                Harga per siswa, tidak bergantung jumlah peserta.
               </p>
             </div>
           )}
@@ -901,7 +902,8 @@ function LobbyCard({
   onShowDetail: () => void;
 }) {
   const activeMembers = lobby.member_count ?? 0;
-  const canJoin = lobby.status === 'open' && !lobby.current_user_is_member && activeMembers < lobby.max_participants;
+  const isLocked = new Date(lobby.starts_at).getTime() - Date.now() < 24 * 60 * 60 * 1000;
+  const canJoin = (lobby.status === 'open' || lobby.status === 'paid') && !lobby.current_user_is_member && activeMembers < lobby.max_participants && !isLocked;
   const memberCountLabel = `${activeMembers}/${lobby.max_participants} siswa`;
   const progressLabel = `${activeMembers}/${lobby.max_participants}`;
 
@@ -1103,13 +1105,13 @@ function PaginationControls({
     } else {
       let start = Math.max(1, currentPage - 2);
       let end = Math.min(totalPages, currentPage + 2);
-      
+
       if (start === 1) {
         end = 5;
       } else if (end === totalPages) {
         start = totalPages - 4;
       }
-      
+
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
@@ -1124,7 +1126,7 @@ function PaginationControls({
         <span className="font-semibold text-foreground">{endRange}</span> dari{" "}
         <span className="font-semibold text-foreground">{totalItems}</span> lobby
       </p>
-      
+
       <div className="flex items-center gap-1.5">
         <button
           type="button"
@@ -1141,11 +1143,10 @@ function PaginationControls({
             key={page}
             type="button"
             onClick={() => onPageChange(page)}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold transition ${
-              currentPage === page
-                ? "bg-primary text-white shadow-sm"
-                : "border border-primary/10 bg-white text-primary hover:bg-secondary"
-            }`}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold transition ${currentPage === page
+              ? "bg-primary text-white shadow-sm"
+              : "border border-primary/10 bg-white text-primary hover:bg-secondary"
+              }`}
           >
             {page}
           </button>

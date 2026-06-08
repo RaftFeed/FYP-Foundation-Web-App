@@ -407,21 +407,39 @@ export async function deleteUserAccount(id: string) {
 
   const lobbyIds = new Set<string>();
 
-  const collectLobbyIds = async (query: ReturnType<typeof supabase.from>) => {
-    const { data, error } = await query.select('id');
-    throwIfError(error);
-    for (const row of data ?? []) {
+  const { data: creatorLobbies, error: creatorLobbiesError } = await supabase
+    .from('matchmaking_lobbies')
+    .select('id')
+    .eq('creator_id', id);
+  throwIfError(creatorLobbiesError);
+  for (const row of creatorLobbies ?? []) {
+    if (row?.id) {
+      lobbyIds.add(row.id);
+    }
+  }
+
+  const { data: tutorLobbies, error: tutorLobbiesError } = await supabase
+    .from('matchmaking_lobbies')
+    .select('id')
+    .eq('tutor_user_id', id);
+  throwIfError(tutorLobbiesError);
+  for (const row of tutorLobbies ?? []) {
+    if (row?.id) {
+      lobbyIds.add(row.id);
+    }
+  }
+
+  if (slotIds.length > 0) {
+    const { data: slotLobbies, error: slotLobbiesError } = await supabase
+      .from('matchmaking_lobbies')
+      .select('id')
+      .in('availability_slot_id', slotIds);
+    throwIfError(slotLobbiesError);
+    for (const row of slotLobbies ?? []) {
       if (row?.id) {
         lobbyIds.add(row.id);
       }
     }
-  };
-
-  await collectLobbyIds(supabase.from('matchmaking_lobbies').eq('creator_id', id));
-  await collectLobbyIds(supabase.from('matchmaking_lobbies').eq('tutor_user_id', id));
-
-  if (slotIds.length > 0) {
-    await collectLobbyIds(supabase.from('matchmaking_lobbies').in('availability_slot_id', slotIds));
   }
 
   if (lobbyIds.size > 0) {

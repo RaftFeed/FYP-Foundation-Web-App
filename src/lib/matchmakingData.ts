@@ -875,10 +875,10 @@ export async function payLobbyShare(lobbyId: string) {
   const currentUserId = authData.user?.id;
   if (!currentUserId) throw new Error('Not authenticated');
 
-  // Get the lobby to check status and price
+  // Get the lobby to check status, price, and max participants
   const { data: lobby, error: lobbyError } = await supabase
     .from('matchmaking_lobbies')
-    .select('price_total, status')
+    .select('price_total, status, max_participants')
     .eq('id', lobbyId)
     .maybeSingle();
   throwIfError(lobbyError);
@@ -923,9 +923,13 @@ export async function payLobbyShare(lobbyId: string) {
   const allPaid = (activeMembers ?? []).every((m: { student_id: string }) => paidIds.has(m.student_id));
 
   if (allPaid && (activeMembers ?? []).length > 0) {
+    const isFull = (activeMembers ?? []).length >= (lobby.max_participants ?? 4);
     await supabase
       .from('matchmaking_lobbies')
-      .update({ status: 'paid', updated_at: new Date().toISOString() })
+      .update({ 
+        status: isFull ? 'paid' : 'open', 
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', lobbyId);
   }
 }

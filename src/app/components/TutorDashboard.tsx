@@ -784,7 +784,7 @@ function DashboardView({
           <div className="space-y-4">
             {isLoading && <div className="p-6 text-sm font-medium text-muted-foreground">Memuat slot tutor...</div>}
             {!isLoading && upcomingSlots.length === 0 && <div className="p-6 text-sm font-medium text-muted-foreground">Belum ada slot aktif untuk ditampilkan.</div>}
-            {upcomingSlots.map((slot) => (
+            {upcomingSlots.slice(0, 3).map((slot) => (
               <SlotCard key={slot.id} slot={slot} onViewStudents={setStudentModalSlot} />
             ))}
           </div>

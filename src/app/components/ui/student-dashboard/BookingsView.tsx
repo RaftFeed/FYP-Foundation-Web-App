@@ -62,11 +62,10 @@ function CountdownTimer({ expiresAt }: { expiresAt: string }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums ${
-        isUrgent
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums ${isUrgent
           ? 'bg-red-100 text-red-700 animate-pulse'
           : 'bg-amber-100 text-amber-700'
-      }`}
+        }`}
     >
       <Timer className="h-3 w-3" />
       {label}
@@ -312,7 +311,8 @@ export function JoinedLobbyRow({
 }) {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const memberCount = lobby.member_count ?? 0;
-  const canLeave = lobby.status !== 'completed' && lobby.status !== 'cancelled' && lobby.status !== 'expired';
+  const isLocked = new Date(lobby.starts_at).getTime() - Date.now() < 24 * 60 * 60 * 1000;
+  const canLeave = lobby.status !== 'completed' && lobby.status !== 'cancelled' && lobby.status !== 'expired' && !isLocked;
   const canPay = lobby.status === 'pending_payment' && !lobby.current_user_has_paid;
 
   return (
@@ -335,19 +335,23 @@ export function JoinedLobbyRow({
           <p className="mb-2 rounded-md bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground italic">{lobby.description}</p>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
-          <span className={`rounded-full px-3 py-1 ${
-            lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
-            lobby.status === 'pending_payment' ? (
-              lobby.current_user_has_paid ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-            ) :
-            lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
-            'bg-secondary text-primary'
-          }`}>
+          <span className={`rounded-full px-3 py-1 ${lobby.status === 'paid' ? 'bg-green-100 text-green-700' :
+              lobby.status === 'pending_payment' ? (
+                lobby.current_user_has_paid ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+              ) :
+                lobby.status === 'cancelled' || lobby.status === 'expired' ? 'bg-red-100 text-red-700' :
+                  'bg-secondary text-primary'
+            }`}>
             {lobby.status === 'pending_payment' && lobby.current_user_has_paid
               ? 'Sudah Bayar (Menunggu Anggota Lain)'
               : lobbyStatusLabels[lobby.status]}
           </span>
-          {(lobby.status === 'open' || lobby.status === 'pending_payment') && (
+          {isLocked && (lobby.status === 'open' || lobby.status === 'paid') && (
+            <span className="rounded-full bg-slate-100 text-slate-700 px-3 py-1">
+              Terkunci (Mulai &lt; 24 jam)
+            </span>
+          )}
+          {(lobby.status === 'open' || (lobby.status === 'pending_payment' && !lobby.current_user_has_paid)) && !isLocked && (
             <CountdownTimer expiresAt={lobby.expires_at} />
           )}
           <span>{formatDate(lobby.starts_at)}</span>
@@ -451,13 +455,13 @@ export function PaginationControls({
     } else {
       let start = Math.max(1, currentPage - 2);
       let end = Math.min(totalPages, currentPage + 2);
-      
+
       if (start === 1) {
         end = 5;
       } else if (end === totalPages) {
         start = totalPages - 4;
       }
-      
+
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
@@ -472,7 +476,7 @@ export function PaginationControls({
         <span className="font-semibold text-foreground">{endRange}</span> dari{" "}
         <span className="font-semibold text-foreground">{totalItems}</span> lobby
       </p>
-      
+
       <div className="flex items-center gap-1.5">
         <button
           type="button"
@@ -489,11 +493,10 @@ export function PaginationControls({
             key={page}
             type="button"
             onClick={() => onPageChange(page)}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold transition ${
-              currentPage === page
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold transition ${currentPage === page
                 ? "bg-primary text-white shadow-sm"
                 : "border border-primary/10 bg-white text-primary hover:bg-secondary"
-            }`}
+              }`}
           >
             {page}
           </button>

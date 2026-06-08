@@ -86,6 +86,7 @@ export function SlotCard({
   onCancel,
   onDelete,
   onCreateLobby,
+  onJoinLobby,
   showCancel = true,
 }: {
   slot: TutorAvailabilitySlot;
@@ -94,6 +95,7 @@ export function SlotCard({
   onCancel?: (slot: TutorAvailabilitySlot) => void;
   onDelete?: (slot: TutorAvailabilitySlot) => void;
   onCreateLobby?: (slotId: string) => void;
+  onJoinLobby?: (slotId: string) => void;
   showCancel?: boolean;
 }) {
   const effectiveStatus = getEffectiveStatus(slot);
@@ -165,6 +167,16 @@ export function SlotCard({
           >
             <Users className="h-4 w-4" />
             Buat Lobby
+          </button>
+        )}
+        {onJoinLobby && (slot.status === 'held' || slot.status === 'booked') && (
+          <button
+            type="button"
+            onClick={() => onJoinLobby(slot.id)}
+            className="flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 transition shadow-sm"
+          >
+            <Users className="h-4 w-4" />
+            Gabung Lobby
           </button>
         )}
         {onCancel && canCancel && (

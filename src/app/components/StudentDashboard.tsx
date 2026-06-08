@@ -28,6 +28,8 @@ import {
   fetchMatchmakingLobbies,
   fetchStudentTutorScheduleSlots,
   leaveMatchmakingLobby,
+  joinMatchmakingLobby,
+  forceLobbyToPendingPayment,
 } from '../../lib/matchmakingData';
 
 export type StudentView = 'dashboard' | 'courses' | 'lobbies' | 'bookings' | 'schedule' | 'profile' | 'settings';
@@ -167,8 +169,6 @@ export function StudentDashboard() {
     previousActiveView.current = activeView;
   }, [activeView]);
 
-
-
   const handleAvatarUpload = async (file: File) => {
     if (!user) return;
     setIsUploadingAvatar(true);
@@ -194,7 +194,6 @@ export function StudentDashboard() {
     } finally {
       setIsUploadingAvatar(false);
     }
-
   };
 
   const handleProfileSave = async () => {
@@ -235,6 +234,27 @@ export function StudentDashboard() {
       await loadDashboard();
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : 'Gagal keluar dari lobby grup.');
+    }
+  };
+
+  const handleJoinLobbyFromSchedule = async (lobby: MatchmakingLobby) => {
+    setIsLoading(true);
+    setNotice(null);
+    try {
+      await joinMatchmakingLobby(lobby.code);
+      await forceLobbyToPendingPayment(lobby.id);
+      
+      // Refresh the dashboard data
+      await loadDashboard();
+      
+      // Transition to Bookings tab
+      setActiveView('bookings');
+      
+      showNotice('success', 'Berhasil bergabung ke lobby! Selesaikan pembayaran Anda.');
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : 'Gagal bergabung ke lobby.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -400,6 +420,7 @@ export function StudentDashboard() {
                 setPendingLobbySlotId(slotId);
                 setActiveView('lobbies');
               }}
+              onJoinLobby={handleJoinLobbyFromSchedule}
             />
           )}
           {activeView === 'settings' && <SettingsView showNotice={showNotice} />}
@@ -425,5 +446,3 @@ export function StudentDashboard() {
     </div>
   );
 }
-
-

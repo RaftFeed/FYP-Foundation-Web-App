@@ -42,10 +42,12 @@ export function TutorScheduleView({
   slots,
   isStudentView,
   onCreateLobby,
+  onJoinLobby,
 }: {
   slots: TutorAvailabilitySlot[];
   isStudentView?: boolean;
   onCreateLobby?: (slotId: string) => void;
+  onJoinLobby?: (lobby: MatchmakingLobby) => void;
 }) {
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -76,11 +78,17 @@ export function TutorScheduleView({
         const map = new Map<string, MatchmakingLobby>();
         for (const lobby of lobbies) {
           if (
-            lobby.current_user_is_member &&
             lobby.availability_slot_id &&
-            !map.has(lobby.availability_slot_id)
+            lobby.status !== 'expired' &&
+            lobby.status !== 'cancelled'
           ) {
-            map.set(lobby.availability_slot_id, lobby);
+            // Prioritize lobbies where user is a member
+            if (lobby.current_user_is_member) {
+              map.set(lobby.availability_slot_id, lobby);
+            } else if (!map.has(lobby.availability_slot_id) && lobby.visibility === 'public') {
+              // Otherwise, map public lobbies so user can join
+              map.set(lobby.availability_slot_id, lobby);
+            }
           }
         }
         setSlotLobbyMap(map);
@@ -307,13 +315,18 @@ export function TutorScheduleView({
               <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
                 {selectedDateSessions.map((session) => {
                   const lobby = isStudentView ? slotLobbyMap.get(session.id) : undefined;
+                  const isLocked = lobby ? (new Date(lobby.starts_at).getTime() - Date.now() < 24 * 60 * 60 * 1000) : false;
+                  const isFull = lobby ? (lobby.member_count >= lobby.max_participants) : false;
+                  const canJoin = lobby && !lobby.current_user_is_member && !isFull && !isLocked && ['open', 'pending_payment', 'paid'].includes(lobby.status);
+
                   return (
                     <SlotCard
                       key={session.id}
                       slot={session}
                       onViewStudents={isStudentView ? undefined : setStudentModalSlot}
-                      onViewLobby={lobby ? () => setLobbyDetailTarget(lobby) : undefined}
+                      onViewLobby={lobby && lobby.current_user_is_member ? () => setLobbyDetailTarget(lobby) : undefined}
                       onCreateLobby={isStudentView && !lobby ? onCreateLobby : undefined}
+                      onJoinLobby={isStudentView && canJoin && onJoinLobby ? () => onJoinLobby(lobby) : undefined}
                       showCancel={false}
                     />
                   );
