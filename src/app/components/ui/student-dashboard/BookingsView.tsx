@@ -98,7 +98,15 @@ export function BookingsView({
       return joinedLobbies;
     }
 
-    return joinedLobbies.filter((lobby) => lobbyStatusesByTab[activeTab].includes(lobby.status));
+    return joinedLobbies.filter((lobby) => {
+      if (activeTab === 'Menunggu Pembayaran') {
+        return lobby.status === 'pending_payment' && !lobby.current_user_has_paid;
+      }
+      if (activeTab === 'Mendatang') {
+        return lobbyStatusesByTab[activeTab].includes(lobby.status) || (lobby.status === 'pending_payment' && lobby.current_user_has_paid);
+      }
+      return lobbyStatusesByTab[activeTab].includes(lobby.status);
+    });
   }, [activeTab, joinedLobbies]);
 
   const [currentPage, setCurrentPage] = useState(1);

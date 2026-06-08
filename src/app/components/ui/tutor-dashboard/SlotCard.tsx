@@ -288,7 +288,7 @@ export function LobbyDetailModal({
               <span>{formatTimeRange(lobby.starts_at, lobby.ends_at)}</span>
               <span>·</span>
               <span>{memberCount}/{lobby.max_participants} siswa</span>
-              {(lobby.status === 'open' || lobby.status === 'pending_payment') && (
+              {(lobby.status === 'open' || (lobby.status === 'pending_payment' && !lobby.current_user_has_paid)) && (
                 <>
                   <span>·</span>
                   <DetailCountdown expiresAt={lobby.expires_at} />
