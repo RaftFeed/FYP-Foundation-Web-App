@@ -116,6 +116,7 @@ export function BookingsView({
     setCurrentPage(1);
   }, [activeTab]);
 
+  
   const totalPages = Math.ceil(visibleJoinedLobbies.length / ITEMS_PER_PAGE);
 
   const paginatedLobbies = useMemo(() => {
